@@ -1,3 +1,7 @@
+![roaring](https://github.com/oldmoe/roaringlite/blob/main/media/roaring_cat_s.jpg?raw=true)
+
+Image courtesty of Madeleine on Flickr (creative commons license)
+
 # RoaringLite
 Roaring Bitmaps extension for SQLite
 
