@@ -124,4 +124,5 @@ ruby test_roaring_bitmaps.rb
 ## TODO
 
 - Implement the rest of the Roaring bitmap functions
+- Implement a native table valued function interface instead of relying on carray
 - Implement the Roaring64 version (once an official release is out)
