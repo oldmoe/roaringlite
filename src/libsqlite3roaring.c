@@ -6,12 +6,12 @@ SQLITE_EXTENSION_INIT1
 /* Insert your extension code here */
 
 
-static void roaringFreeFunc(void *p){
+static void roaringFreeFunc(roaring_bitmap_t *p){
   roaring_bitmap_free(p);
 }
 
 
-static void roaringArrayFreeFunc(void *p){
+static void roaringArrayFreeFunc(int *p){
   free(p);
 }
 
@@ -654,7 +654,7 @@ static void roaringArrayFunc(
   ids = malloc(nSize * sizeof(uint32_t));
   roaring_bitmap_to_uint32_array(r, ids);
   roaring_bitmap_free(r); 
-  sqlite3_result_pointer(context, ids, "carray", sqlite3_free);
+  sqlite3_result_pointer(context, ids, "carray", (void*)roaringArrayFreeFunc);
 }
 
 
