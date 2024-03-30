@@ -1,3 +1,7 @@
+![roaring](https://github.com/oldmoe/roaringlite/blob/main/media/roaring_cat_s.jpg?raw=true)
+
+Image courtesty of Madeleine on Flickr (creative commons license)
+
 # RoaringLite
 Roaring Bitmaps extension for SQLite
 
@@ -120,4 +124,5 @@ ruby test_roaring_bitmaps.rb
 ## TODO
 
 - Implement the rest of the Roaring bitmap functions
+- Implement a native table valued function interface instead of relying on carray
 - Implement the Roaring64 version (once an official release is out)
