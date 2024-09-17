@@ -12,7 +12,7 @@ static void roaringFreeFunc(roaring_bitmap_t *p){
 
 
 static void roaringArrayFreeFunc(int *p){
-  free(p);
+  sqlite3_free(p);
 }
 
 /*********************************************
@@ -34,7 +34,7 @@ static void roaringCreateFunc(
     roaring_bitmap_add(r, sqlite3_value_int(argv[i]));
   }
   int nSize = (int )roaring_bitmap_size_in_bytes(r);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring_bitmap_serialize(r, pOut);
   roaring_bitmap_free(r);  
   sqlite3_result_blob(context, pOut, nOut, sqlite3_free); 
@@ -95,7 +95,7 @@ static void roaringCreateFinal(sqlite3_context *context){
     rc->rb = roaring_bitmap_create();    
   }
   nSize = (int )roaring_bitmap_size_in_bytes(rc->rb);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(rc->rb, pOut);
   roaring_bitmap_free(rc->rb); 
   memset(rc, 0, sizeof(*rc)); 
@@ -135,7 +135,7 @@ static void roaringAddFunc(
   }
   roaring_bitmap_add(r, sqlite3_value_int(argv[1]));
   int nSize = (int) roaring_bitmap_size_in_bytes(r);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring_bitmap_serialize(r, pOut);
   roaring_bitmap_free(r);  
   sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
@@ -166,7 +166,7 @@ static void roaringRemoveFunc(
   }
   roaring_bitmap_remove(r, sqlite3_value_int(argv[1]));
   int nSize = (int) roaring_bitmap_size_in_bytes(r);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring_bitmap_serialize(r, pOut);
   roaring_bitmap_free(r);  
   sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
@@ -237,7 +237,7 @@ static void roaringAndManyFunc(
     rfinal = roaring_bitmap_create();
   }
   int nSize = (int )roaring_bitmap_size_in_bytes(rfinal);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring_bitmap_serialize(rfinal, pOut);
   roaring_bitmap_free(rfinal);  
   sqlite3_result_blob(context, pOut, nOut, sqlite3_free); 
@@ -272,7 +272,7 @@ static void roaringOrManyFunc(
     roaring_bitmap_free(r);
   }
   int nSize = (int )roaring_bitmap_size_in_bytes(rfinal);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring_bitmap_serialize(rfinal, pOut);
   roaring_bitmap_free(rfinal);  
   sqlite3_result_blob(context, pOut, nOut, sqlite3_free); 
@@ -307,7 +307,7 @@ static void roaringAndFunc(
   roaring_bitmap_and_inplace(r1, r2);
   int nOut, nSize;
   nSize = (int) roaring_bitmap_size_in_bytes(r1);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(r1, pOut);
   roaring_bitmap_free(r1);  
   roaring_bitmap_free(r2);  
@@ -341,7 +341,7 @@ static void roaringNotFunc(
   roaring_bitmap_andnot_inplace(r1, r2);
   int nOut, nSize;
   nSize = (int) roaring_bitmap_size_in_bytes(r1);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(r1, pOut);
   roaring_bitmap_free(r1);  
   roaring_bitmap_free(r2);  
@@ -406,7 +406,7 @@ static void roaringXorFunc(
   roaring_bitmap_xor_inplace(r1, r2);
   int nOut, nSize;
   nSize = (int) roaring_bitmap_size_in_bytes(r1);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(r1, pOut);
   roaring_bitmap_free(r1);  
   roaring_bitmap_free(r2);  
@@ -501,7 +501,7 @@ static void roaringOrFunc(
   roaring_bitmap_or_inplace(r1, r2);
   int nOut, nSize;
   nSize = (int) roaring_bitmap_size_in_bytes(r1);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(r1, pOut);
   roaring_bitmap_free(r1);  
   roaring_bitmap_free(r2);  
@@ -561,7 +561,7 @@ static void roaringAndAllFinal(sqlite3_context *context){
     rc->rb = roaring_bitmap_create();    
   }
   nSize = (int) roaring_bitmap_size_in_bytes(rc->rb);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(rc->rb, pOut);
   roaring_bitmap_free(rc->rb); 
   memset(rc, 0, sizeof(*rc)); 
@@ -611,7 +611,7 @@ static void roaringOrAllFinal(sqlite3_context *context){
     rc->rb = roaring_bitmap_create();    
   }
   nSize = (int) roaring_bitmap_size_in_bytes(rc->rb);
-  char *pOut = malloc(nSize);
+  char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(rc->rb, pOut);
   roaring_bitmap_free(rc->rb); 
   memset(rc, 0, sizeof(*rc)); 
@@ -651,7 +651,7 @@ static void roaringArrayFunc(
   }
   int nSize = roaring_bitmap_get_cardinality(r);
   uint32_t *ids;
-  ids = malloc(nSize * sizeof(uint32_t));
+  ids = sqlite3_malloc(nSize * sizeof(uint32_t));
   roaring_bitmap_to_uint32_array(r, ids);
   roaring_bitmap_free(r); 
   sqlite3_result_pointer(context, ids, "carray", (void*)roaringArrayFreeFunc);
