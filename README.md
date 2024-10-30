@@ -24,7 +24,7 @@ Roaring bitmaps have a compressed internal representation that is a lot more eff
 To compile and use this extension you should run the following command line
 
 ```bash
-gcc -g -fPIC -shared libsqlite3roaring.c -o libraoring.so
+gcc -g -fPIC -shared libsqlite3roaring.c -o libroaring.so
 ```
 
 ## Using Roaring bitmaps with SQLite
