@@ -3,7 +3,210 @@
 #include "roaring.c"
 SQLITE_EXTENSION_INIT1
 
-/* Insert your extension code here */
+#ifndef SQLITE_OMIT_VIRTUALTABLE
+
+typedef struct sqlite3roaring_cursor sqlite3roaring_cursor;
+
+struct sqlite3roaring_cursor {
+    sqlite3_vtab_cursor base;
+    roaring_uint32_iterator_t roaring_it;
+    roaring_bitmap_t *roaring;
+};
+
+
+
+/* Allocate and initialize */
+
+static int roaringConnect(
+  sqlite3 *db,
+  void *pUnused,
+  int argcUnused, const char *const*argvUnused,
+  sqlite3_vtab **ppVtab,
+  char **pzErrUnused
+)
+{
+  sqlite3_vtab *pNew;
+  int rc;
+
+  rc = sqlite3_declare_vtab(db, "CREATE TABLE x(value, bitmap BLOB HIDDEN)");
+  if( rc==SQLITE_OK ){
+    pNew = *ppVtab = sqlite3_malloc( sizeof(*pNew) );
+    if( pNew==0 ) return SQLITE_NOMEM;
+    memset(pNew, 0, sizeof(*pNew));
+    sqlite3_vtab_config(db, SQLITE_VTAB_INNOCUOUS);
+  }
+  return rc;
+}
+
+
+/* Deallocate */
+static int roaringDisconnect(sqlite3_vtab *pVtab){
+  sqlite3_free(pVtab);
+  return SQLITE_OK;
+}
+
+
+
+/*
+** Constructor for a new roaring_cursor object.
+*/
+static int roaringOpen(sqlite3_vtab *p, sqlite3_vtab_cursor **ppCursor){
+  sqlite3roaring_cursor *pCur;
+  pCur = sqlite3_malloc( sizeof(*pCur) );
+  if( pCur==0 ) return SQLITE_NOMEM;
+  memset(pCur, 0, sizeof(*pCur));
+  *ppCursor = &pCur->base;
+  return SQLITE_OK;
+}
+
+/*
+** Destructor for a roaring cursor.
+*/
+static int roaringClose(sqlite3_vtab_cursor *cur)
+{
+  sqlite3roaring_cursor *pCur = (sqlite3roaring_cursor*) cur;
+  if (pCur->roaring) {
+    roaring_free(pCur->roaring);
+  }
+  sqlite3_free(cur);
+  return SQLITE_OK;
+}
+
+/*
+ ** Get the rowid. In this implementation, rowid = current value
+ */
+static int roaringRowid(sqlite3_vtab_cursor *cur, sqlite_int64 *pRowid){
+  sqlite3roaring_cursor *pCur = (sqlite3roaring_cursor*) cur;
+  *pRowid = pCur->roaring_it.current_value;
+  return SQLITE_OK;
+}
+
+/*
+ ** Advance the iterator. 
+ */
+
+static int roaringNext(sqlite3_vtab_cursor *cur)
+{
+  sqlite3roaring_cursor *pCur = (sqlite3roaring_cursor*) cur;
+
+  if (pCur->roaring_it.has_value) {
+    roaring_uint32_iterator_advance(&pCur->roaring_it);
+  }
+  return SQLITE_OK;
+}
+
+static int roaringColumn(
+  sqlite3_vtab_cursor *cur,
+  sqlite3_context *ctx,
+  int i
+)
+{
+  sqlite3roaring_cursor *pCur = (sqlite3roaring_cursor*) cur;
+
+  if (!pCur->roaring_it.has_value) {
+    return SQLITE_ERROR;
+  }
+  if (i == 0 || i == -1) {
+    sqlite3_result_int(ctx, pCur->roaring_it.current_value);
+    return SQLITE_OK;
+  }
+  return SQLITE_RANGE;
+}
+
+static int roaringEof(sqlite3_vtab_cursor *cur)
+{
+  sqlite3roaring_cursor *pCur = (sqlite3roaring_cursor*) cur;
+  return !pCur->roaring_it.has_value;
+}
+
+static int roaringFilter(
+  sqlite3_vtab_cursor *cur, 
+  int idxNum, const char *idxStr,
+  int argc,
+  sqlite3_value **argv
+){
+  sqlite3roaring_cursor *pCur = (sqlite3roaring_cursor*) cur;
+  const unsigned char *blob_ptr;
+  unsigned int blob_len;
+
+  if( pCur->roaring ) {
+    roaring_bitmap_free(pCur->roaring);
+    pCur->roaring = NULL;
+  }
+  
+  if( idxNum != 1 || argc < 1 || sqlite3_value_type(argv[0]) != SQLITE_BLOB ) {
+    return SQLITE_ERROR;
+  }
+
+  blob_ptr = sqlite3_value_blob(argv[0]);
+  blob_len = sqlite3_value_bytes(argv[0]);
+  pCur->roaring = roaring_bitmap_deserialize_safe(blob_ptr, blob_len);
+  if( pCur->roaring == NULL ) {
+    return SQLITE_ERROR;
+  }
+  roaring_iterator_init(pCur->roaring, &pCur->roaring_it);
+  return SQLITE_OK;
+}
+
+
+static int roaringBestIndex(
+  sqlite3_vtab *tab,
+  sqlite3_index_info *pIdxInfo
+){
+
+  int i;
+  unsigned seen = 0;
+
+  const struct sqlite3_index_constraint *pConstraint;
+  pConstraint = pIdxInfo->aConstraint;
+  for(i=0; i<pIdxInfo->nConstraint; i++, pConstraint++){
+    if( pConstraint->op!=SQLITE_INDEX_CONSTRAINT_EQ ) continue;
+    if ( pConstraint->iColumn != 1 ) continue;
+    if ( !pConstraint->usable) continue;
+    pIdxInfo->aConstraintUsage[i].argvIndex = 1;  /* First argument to xFilter */
+    pIdxInfo->aConstraintUsage[i].omit = 1;       /* Don't double-check constraint */
+    pIdxInfo->idxNum = 1;                         /* We have our parameter */
+    pIdxInfo->estimatedCost = 10.0;               /* Low cost estimate */
+    return SQLITE_OK;
+  }
+
+  /* No bitmap. Penalize! */
+  
+  pIdxInfo->idxNum = 0;                    /* No parameters */
+  pIdxInfo->estimatedCost = 1000000000.0;  /* Very high cost - discourage this */
+  return SQLITE_OK;
+}
+
+
+static sqlite3_module roaringModule = {
+  0,                         /* iVersion */
+  0,                         /* xCreate */
+  roaringConnect,             /* xConnect */
+  roaringBestIndex,           /* xBestIndex */
+  roaringDisconnect,          /* xDisconnect */
+  0,                         /* xDestroy */
+  roaringOpen,                /* xOpen - open a cursor */
+  roaringClose,               /* xClose - close a cursor */
+  roaringFilter,              /* xFilter - configure scan constraints */
+  roaringNext,                /* xNext - advance a cursor */
+  roaringEof,                 /* xEof - check for end of scan */
+  roaringColumn,              /* xColumn - read data */
+  roaringRowid,               /* xRowid - read data */
+  0,                         /* xUpdate */
+  0,                         /* xBegin */
+  0,                         /* xSync */
+  0,                         /* xCommit */
+  0,                         /* xRollback */
+  0,                         /* xFindMethod */
+  0,                         /* xRename */
+  0,                         /* xSavepoint */
+  0,                         /* xRelease */
+  0,                         /* xRollbackTo */
+  0,                         /* xShadow */
+  0                          /* xIntegrity */
+};
+
+#endif /* SQLITE_OMIT_VIRTUALTABLE */
 
 static void roaringFreeFunc(roaring_bitmap_t *p){
   roaring_bitmap_free(p);
@@ -1288,5 +1491,6 @@ int sqlite3_roaring_init(
   rc = sqlite3_create_function(db, "rb_array", 1, flags, 0, roaringArrayFunc, 0, 0);
   // 64 bit version
   rc = sqlite3_create_function(db, "rb64_array", 1, flags, 0, roaring64ArrayFunc, 0, 0);
+  rc = sqlite3_create_module(db, "rb", &roaringModule, 0);
   return rc;
 }

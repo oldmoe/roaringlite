@@ -183,6 +183,11 @@ class TestRoaringBitmap < Minitest::Test
     assert_equal 1111, result
   end
 
+  def test_rb_vtable
+    result = DB.query_single_splat("SELECT sum(value) FROM rb(rb_create(1, 10, 100, 1000))")
+    assert_equal 1111, result
+  end
+
   def test_rb64_array
     result = DB.query_single_splat("SELECT sum(value) FROM carray(rb64_array(rb64_create(1, 10, 100, 1000)), 4, 'int64')")
     assert_equal 1111, result
