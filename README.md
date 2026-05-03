@@ -1,6 +1,6 @@
 ![roaring](https://github.com/oldmoe/roaringlite/blob/main/media/roaring_cat_s.jpg?raw=true)
 
-Image courtesty of Madeleine on Flickr (creative commons license)
+Image courtesy of Madeleine on Flickr (creative commons license)
 
 # RoaringLite
 Roaring Bitmaps extension for SQLite
@@ -33,7 +33,7 @@ In order to use the library you need to load the extension first
 
 #### SQLite3 CLI
 ```
-.load ./libraoring
+.load ./libroaring
 ```
 Or you can load it via your favourite SQLite3 driver, e.g.
 
@@ -109,7 +109,7 @@ Performs an OR on all the values returned from a query, much faster than using r
 rb_array transforms the bitmap to an int32 array that interfaces with the carray sqlite3 exetnsion
 
 ```sql
-.load ./libroraing
+.load ./libroaring
 .load ./carray
 SELECT sum(value) FROM carray(rb_array(bitmap), rb_count(bitmap)); -- the count must be supplied
 ```
