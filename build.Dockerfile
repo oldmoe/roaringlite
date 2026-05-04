@@ -46,41 +46,41 @@ ENV CFLAGS="-O3 \
 
 FROM base AS build-macos-x86_64
 RUN zig cc -target x86_64-macos $CFLAGS -shared -fvisibility=hidden \
-      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-x86_64.dylib \
+      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-macos-x86_64.dylib \
  && zig cc -target x86_64-macos -O3 -shared -fPIC -fvisibility=hidden \
       -I /build/sqlite -I /build/roaringlite/src \
       /build/roaringlite/src/libsqlite3roaring.c \
-      -o /out/lib/roaringlite-x86_64.dylib
+      -o /out/lib/roaringlite-macos-x86_64.dylib
 
 FROM base AS build-macos-aarch64
 RUN zig cc -target aarch64-macos $CFLAGS -shared -fvisibility=hidden \
-      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-aarch64.dylib \
+      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-macos-aarch64.dylib \
  && zig cc -target aarch64-macos -O3 -shared -fPIC -fvisibility=hidden \
       -I /build/sqlite -I /build/roaringlite/src \
       /build/roaringlite/src/libsqlite3roaring.c \
-      -o /out/lib/roaringlite-aarch64.dylib
+      -o /out/lib/roaringlite-macos-aarch64.dylib
 
 FROM base AS build-linux-x86_64
 RUN zig cc -target x86_64-linux $CFLAGS -shared -fvisibility=hidden \
-      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-x86_64.so \
+      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-linux-x86_64.so \
  && zig cc -target x86_64-linux -O3 -shared -fPIC -fvisibility=hidden \
       -I /build/sqlite -I /build/roaringlite/src \
       /build/roaringlite/src/libsqlite3roaring.c \
-      -o /out/lib/roaringlite-x86_64.so
+      -o /out/lib/roaringlite-linux-x86_64.so
 
 FROM base AS build-linux-aarch64
 RUN zig cc -target aarch64-linux $CFLAGS -shared -fvisibility=hidden \
-      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-aarch64.so \
+      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-linux-aarch64.so \
  && zig cc -target aarch64-linux -O3 -shared -fPIC -fvisibility=hidden \
       -I /build/sqlite -I /build/roaringlite/src \
       /build/roaringlite/src/libsqlite3roaring.c \
-      -o /out/lib/roaringlite-aarch64.so
+      -o /out/lib/roaringlite-linux-aarch64.so
 
 FROM base AS build-windows-x86_64
 RUN zig cc -target x86_64-windows -O3 -shared -fvisibility=hidden \
       -I /build/sqlite -I /build/roaringlite/src \
       /build/roaringlite/src/libsqlite3roaring.c \
-      -o /out/lib/roaringlite-x86_64.dll
+      -o /out/lib/roaringlite-windows-x86_64.dll
 
 
 FROM scratch AS collect
