@@ -10,7 +10,7 @@ static void roaringFreeFunc(roaring_bitmap_t *p){
 }
 
 static void roaring64FreeFunc(roaring64_bitmap_t *p){
-  roaring64_bitmap_free(p);  
+  roaring64_bitmap_free(p);
 }
 
 static void roaringArrayFreeFunc(int *p){
@@ -26,7 +26,7 @@ static void roaring64ArrayFreeFunc(int64_t *p){
   --------------------------------------------
   creates a new bitmap comprised of all the supplied integers
 *********************************************/
-static void roaringCreateFunc(  
+static void roaringCreateFunc(
   sqlite3_context *context,
   int argc,
   sqlite3_value **argv
@@ -42,11 +42,11 @@ static void roaringCreateFunc(
   int nSize = (int )roaring_bitmap_size_in_bytes(r);
   char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring_bitmap_serialize(r, pOut);
-  roaring_bitmap_free(r);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free); 
+  roaring_bitmap_free(r);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
-static void roaring64CreateFunc(  
+static void roaring64CreateFunc(
   sqlite3_context *context,
   int argc,
   sqlite3_value **argv
@@ -62,8 +62,8 @@ static void roaring64CreateFunc(
   int nSize = (int )roaring64_bitmap_portable_size_in_bytes(r);
   char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring64_bitmap_portable_serialize(r, pOut);
-  roaring64_bitmap_free(r);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free); 
+  roaring64_bitmap_free(r);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 /*
@@ -83,10 +83,10 @@ struct Roaring64Context {
 
 
 /*********************************************
-  rb_group_create(col) 
+  rb_group_create(col)
   --------------------------------------------
   creates a bitmap from a SQL aggregation
-  
+
   example: SELECT rb_group_create(col) FROM table;
 *********************************************/
 static void roaringCreateStep(
@@ -103,13 +103,13 @@ static void roaringCreateStep(
     return;
   }
 
-  // check if the context already has the roaring bitmap  
+  // check if the context already has the roaring bitmap
   rc = (RoaringContext*)sqlite3_aggregate_context(context, sizeof(*rc));
   if(rc->init == 0){
     // create a roaring bitmap
     rc->rb = roaring_bitmap_create();
     if(rc->rb == NULL){
-      memset(rc, 0, sizeof(*rc)); 
+      memset(rc, 0, sizeof(*rc));
       sqlite3_result_error(context, "failed to create bitmap in step", -1);
       return;
     }
@@ -121,18 +121,18 @@ static void roaringCreateStep(
 static void roaringCreateFinal(sqlite3_context *context){
   RoaringContext *rc;
   int nOut, nSize;
-  
+
   rc = (RoaringContext*)sqlite3_aggregate_context(context, sizeof(*rc));
   if(rc->rb == NULL){
     // no rb was created, must be an empty result set
-    rc->rb = roaring_bitmap_create();    
+    rc->rb = roaring_bitmap_create();
   }
   nSize = (int )roaring_bitmap_size_in_bytes(rc->rb);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(rc->rb, pOut);
-  roaring_bitmap_free(rc->rb); 
-  memset(rc, 0, sizeof(*rc)); 
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring_bitmap_free(rc->rb);
+  memset(rc, 0, sizeof(*rc));
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 static void roaring64CreateStep(
@@ -149,13 +149,13 @@ static void roaring64CreateStep(
     return;
   }
 
-  // check if the context already has the roaring bitmap  
+  // check if the context already has the roaring bitmap
   rc = (Roaring64Context*)sqlite3_aggregate_context(context, sizeof(*rc));
   if(rc->init == 0){
     // create a roaring bitmap
     rc->rb = roaring64_bitmap_create();
     if(rc->rb == NULL){
-      memset(rc, 0, sizeof(*rc)); 
+      memset(rc, 0, sizeof(*rc));
       sqlite3_result_error(context, "failed to create bitmap in step", -1);
       return;
     }
@@ -167,18 +167,18 @@ static void roaring64CreateStep(
 static void roaring64CreateFinal(sqlite3_context *context){
   Roaring64Context *rc;
   int nOut, nSize;
-  
+
   rc = (Roaring64Context*)sqlite3_aggregate_context(context, sizeof(*rc));
   if(rc->rb == NULL){
     // no rb was created, must be an empty result set
-    rc->rb = roaring64_bitmap_create();    
+    rc->rb = roaring64_bitmap_create();
   }
   nSize = (int )roaring64_bitmap_portable_size_in_bytes(rc->rb);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring64_bitmap_portable_serialize(rc->rb, pOut);
-  roaring64_bitmap_free(rc->rb); 
-  memset(rc, 0, sizeof(*rc)); 
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring64_bitmap_free(rc->rb);
+  memset(rc, 0, sizeof(*rc));
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 
@@ -188,7 +188,7 @@ static void roaringCreatePFinal(sqlite3_context *context){
   int nOut, nSize;
   rc = (RoaringContext*)sqlite3_aggregate_context(context, sizeof(*rc));
   nSize = (int )roaring_bitmap_size_in_bytes(rc->rb);
-  sqlite3_result_pointer(context, rc->rb, "rbitmap", roaringFreeFunc);  
+  sqlite3_result_pointer(context, rc->rb, "rbitmap", roaringFreeFunc);
 }
 */
 /*********************************************
@@ -202,7 +202,7 @@ static void roaringAddFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   pIn = sqlite3_value_blob(argv[0]);
   nIn = sqlite3_value_bytes(argv[0]);
   roaring_bitmap_t *r = roaring_bitmap_deserialize_safe(pIn, nIn);
@@ -218,8 +218,8 @@ static void roaringAddFunc(
   int nSize = (int) roaring_bitmap_size_in_bytes(r);
   char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring_bitmap_serialize(r, pOut);
-  roaring_bitmap_free(r);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring_bitmap_free(r);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 static void roaring64AddFunc(
@@ -228,7 +228,7 @@ static void roaring64AddFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   pIn = sqlite3_value_blob(argv[0]);
   nIn = sqlite3_value_bytes(argv[0]);
   roaring64_bitmap_t *r = roaring64_bitmap_portable_deserialize_safe(pIn, nIn);
@@ -244,8 +244,8 @@ static void roaring64AddFunc(
   int nSize = (int) roaring64_bitmap_portable_size_in_bytes(r);
   char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring64_bitmap_portable_serialize(r, pOut);
-  roaring64_bitmap_free(r);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring64_bitmap_free(r);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 
@@ -260,7 +260,7 @@ static void roaringRemoveFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   pIn = sqlite3_value_blob(argv[0]);
   nIn = sqlite3_value_bytes(argv[0]);
   roaring_bitmap_t *r = roaring_bitmap_deserialize_safe(pIn, nIn);
@@ -276,8 +276,8 @@ static void roaringRemoveFunc(
   int nSize = (int) roaring_bitmap_size_in_bytes(r);
   char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring_bitmap_serialize(r, pOut);
-  roaring_bitmap_free(r);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring_bitmap_free(r);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 static void roaring64RemoveFunc(
@@ -286,7 +286,7 @@ static void roaring64RemoveFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   pIn = sqlite3_value_blob(argv[0]);
   nIn = sqlite3_value_bytes(argv[0]);
   roaring64_bitmap_t *r = roaring64_bitmap_portable_deserialize_safe(pIn, nIn);
@@ -302,8 +302,8 @@ static void roaring64RemoveFunc(
   int nSize = (int) roaring64_bitmap_portable_size_in_bytes(r);
   char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring64_bitmap_portable_serialize(r, pOut);
-  roaring64_bitmap_free(r);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring64_bitmap_free(r);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 /*********************************************
@@ -317,9 +317,9 @@ static void roaringAndLengthFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -331,8 +331,8 @@ static void roaringAndLengthFunc(
     return;
   }
   int nOut = (int) roaring_bitmap_and_cardinality(r1, r2);
-  roaring_bitmap_free(r1);  
-  roaring_bitmap_free(r2);  
+  roaring_bitmap_free(r1);
+  roaring_bitmap_free(r2);
   sqlite3_result_int(context, nOut);
 }
 
@@ -342,9 +342,9 @@ static void roaring64AndLengthFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -356,8 +356,8 @@ static void roaring64AndLengthFunc(
     return;
   }
   int nOut = (int) roaring64_bitmap_and_cardinality(r1, r2);
-  roaring64_bitmap_free(r1);  
-  roaring64_bitmap_free(r2);  
+  roaring64_bitmap_free(r1);
+  roaring64_bitmap_free(r2);
   sqlite3_result_int64(context, nOut);
 }
 
@@ -368,20 +368,20 @@ static void roaring64AndLengthFunc(
   Bitwise AND all bitmaps and return the result
 *********************************************/
 
-static void roaringAndManyFunc(  
+static void roaringAndManyFunc(
   sqlite3_context *context,
   int argc,
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   roaring_bitmap_t *rfinal;
   roaring_bitmap_t *r;
   for(int i=0; i < argc; i++){
     if(sqlite3_value_type(argv[i])!=SQLITE_BLOB){
       continue;
     }
-    r = roaring_bitmap_deserialize_safe(sqlite3_value_blob(argv[i]), sqlite3_value_bytes(argv[i]));     
+    r = roaring_bitmap_deserialize_safe(sqlite3_value_blob(argv[i]), sqlite3_value_bytes(argv[i]));
     if( r == NULL){
       sqlite3_result_error(context, "invalid bitmap(s)", -1);
       return;
@@ -399,24 +399,24 @@ static void roaringAndManyFunc(
   int nSize = (int )roaring_bitmap_size_in_bytes(rfinal);
   char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring_bitmap_serialize(rfinal, pOut);
-  roaring_bitmap_free(rfinal);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free); 
+  roaring_bitmap_free(rfinal);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
-static void roaring64AndManyFunc(  
+static void roaring64AndManyFunc(
   sqlite3_context *context,
   int argc,
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   roaring64_bitmap_t *rfinal;
   roaring64_bitmap_t *r;
   for(int i=0; i < argc; i++){
     if(sqlite3_value_type(argv[i])!=SQLITE_BLOB){
       continue;
     }
-    r = roaring64_bitmap_portable_deserialize_safe(sqlite3_value_blob(argv[i]), sqlite3_value_bytes(argv[i]));     
+    r = roaring64_bitmap_portable_deserialize_safe(sqlite3_value_blob(argv[i]), sqlite3_value_bytes(argv[i]));
     if( r == NULL){
       sqlite3_result_error(context, "invalid bitmap(s)", -1);
       return;
@@ -434,8 +434,8 @@ static void roaring64AndManyFunc(
   int nSize = (int) roaring64_bitmap_portable_size_in_bytes(rfinal);
   char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring64_bitmap_portable_serialize(rfinal, pOut);
-  roaring64_bitmap_free(rfinal);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free); 
+  roaring64_bitmap_free(rfinal);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 
@@ -445,13 +445,13 @@ static void roaring64AndManyFunc(
   Bitwise OR all bitmaps and return the result
 *********************************************/
 
-static void roaringOrManyFunc(  
+static void roaringOrManyFunc(
   sqlite3_context *context,
   int argc,
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   roaring_bitmap_t *rfinal;
   roaring_bitmap_t *r;
   rfinal = roaring_bitmap_create();
@@ -459,7 +459,7 @@ static void roaringOrManyFunc(
     if(sqlite3_value_type(argv[i])!=SQLITE_BLOB){
       continue;
     }
-    r = roaring_bitmap_deserialize_safe(sqlite3_value_blob(argv[i]), sqlite3_value_bytes(argv[i]));     
+    r = roaring_bitmap_deserialize_safe(sqlite3_value_blob(argv[i]), sqlite3_value_bytes(argv[i]));
     if( r == NULL){
       sqlite3_result_error(context, "invalid bitmap(s)", -1);
       return;
@@ -470,17 +470,17 @@ static void roaringOrManyFunc(
   int nSize = (int )roaring_bitmap_size_in_bytes(rfinal);
   char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring_bitmap_serialize(rfinal, pOut);
-  roaring_bitmap_free(rfinal);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free); 
+  roaring_bitmap_free(rfinal);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
-static void roaring64OrManyFunc(  
+static void roaring64OrManyFunc(
   sqlite3_context *context,
   int argc,
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   roaring64_bitmap_t *rfinal;
   roaring64_bitmap_t *r;
   rfinal = roaring64_bitmap_create();
@@ -488,7 +488,7 @@ static void roaring64OrManyFunc(
     if(sqlite3_value_type(argv[i])!=SQLITE_BLOB){
       continue;
     }
-    r = roaring64_bitmap_portable_deserialize_safe(sqlite3_value_blob(argv[i]), sqlite3_value_bytes(argv[i]));     
+    r = roaring64_bitmap_portable_deserialize_safe(sqlite3_value_blob(argv[i]), sqlite3_value_bytes(argv[i]));
     if( r == NULL){
       sqlite3_result_error(context, "invalid bitmap(s)", -1);
       return;
@@ -499,8 +499,8 @@ static void roaring64OrManyFunc(
   int nSize = (int )roaring64_bitmap_portable_size_in_bytes(rfinal);
   char *pOut = sqlite3_malloc(nSize);
   int nOut = (int) roaring64_bitmap_portable_serialize(rfinal, pOut);
-  roaring64_bitmap_free(rfinal);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free); 
+  roaring64_bitmap_free(rfinal);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 
@@ -515,9 +515,9 @@ static void roaringAndFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -533,9 +533,9 @@ static void roaringAndFunc(
   nSize = (int) roaring_bitmap_size_in_bytes(r1);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(r1, pOut);
-  roaring_bitmap_free(r1);  
-  roaring_bitmap_free(r2);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring_bitmap_free(r1);
+  roaring_bitmap_free(r2);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 static void roaring64AndFunc(
@@ -544,9 +544,9 @@ static void roaring64AndFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -562,9 +562,9 @@ static void roaring64AndFunc(
   nSize = (int) roaring64_bitmap_portable_size_in_bytes(r1);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring64_bitmap_portable_serialize(r1, pOut);
-  roaring64_bitmap_free(r1);  
-  roaring64_bitmap_free(r2);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring64_bitmap_free(r1);
+  roaring64_bitmap_free(r2);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 /*********************************************
@@ -578,9 +578,9 @@ static void roaringNotFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -596,9 +596,9 @@ static void roaringNotFunc(
   nSize = (int) roaring_bitmap_size_in_bytes(r1);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(r1, pOut);
-  roaring_bitmap_free(r1);  
-  roaring_bitmap_free(r2);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring_bitmap_free(r1);
+  roaring_bitmap_free(r2);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 static void roaring64NotFunc(
@@ -607,9 +607,9 @@ static void roaring64NotFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -625,9 +625,9 @@ static void roaring64NotFunc(
   nSize = (int64_t) roaring64_bitmap_portable_size_in_bytes(r1);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int64_t) roaring64_bitmap_portable_serialize(r1, pOut);
-  roaring64_bitmap_free(r1);  
-  roaring64_bitmap_free(r2);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring64_bitmap_free(r1);
+  roaring64_bitmap_free(r2);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 /*********************************************
@@ -641,9 +641,9 @@ static void roaringNotLengthFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -655,8 +655,8 @@ static void roaringNotLengthFunc(
     return;
   }
   int nOut = (int) roaring_bitmap_andnot_cardinality(r1, r2);
-  roaring_bitmap_free(r1);  
-  roaring_bitmap_free(r2);  
+  roaring_bitmap_free(r1);
+  roaring_bitmap_free(r2);
   sqlite3_result_int(context, nOut);
   //roaring_bitmap_and_inplace(r1, r2);
 }
@@ -667,9 +667,9 @@ static void roaring64NotLengthFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -681,8 +681,8 @@ static void roaring64NotLengthFunc(
     return;
   }
   int64_t nOut = (int64_t) roaring64_bitmap_andnot_cardinality(r1, r2);
-  roaring64_bitmap_free(r1);  
-  roaring64_bitmap_free(r2);  
+  roaring64_bitmap_free(r1);
+  roaring64_bitmap_free(r2);
   sqlite3_result_int64(context, nOut);
   //roaring_bitmap_and_inplace(r1, r2);
 }
@@ -698,9 +698,9 @@ static void roaringXorFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -716,9 +716,9 @@ static void roaringXorFunc(
   nSize = (int) roaring_bitmap_size_in_bytes(r1);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(r1, pOut);
-  roaring_bitmap_free(r1);  
-  roaring_bitmap_free(r2);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring_bitmap_free(r1);
+  roaring_bitmap_free(r2);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 static void roaring64XorFunc(
@@ -727,9 +727,9 @@ static void roaring64XorFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -745,9 +745,9 @@ static void roaring64XorFunc(
   nSize = (int64_t) roaring64_bitmap_portable_size_in_bytes(r1);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int64_t) roaring64_bitmap_portable_serialize(r1, pOut);
-  roaring64_bitmap_free(r1);  
-  roaring64_bitmap_free(r2);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring64_bitmap_free(r1);
+  roaring64_bitmap_free(r2);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 /*********************************************
@@ -761,9 +761,9 @@ static void roaringXorLengthFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -775,8 +775,8 @@ static void roaringXorLengthFunc(
     return;
   }
   int nOut = (int) roaring_bitmap_xor_cardinality(r1, r2);
-  roaring_bitmap_free(r1);  
-  roaring_bitmap_free(r2);  
+  roaring_bitmap_free(r1);
+  roaring_bitmap_free(r2);
   sqlite3_result_int(context, nOut);
 }
 
@@ -786,9 +786,9 @@ static void roaring64XorLengthFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -800,8 +800,8 @@ static void roaring64XorLengthFunc(
     return;
   }
   int nOut = (int) roaring64_bitmap_xor_cardinality(r1, r2);
-  roaring64_bitmap_free(r1);  
-  roaring64_bitmap_free(r2);  
+  roaring64_bitmap_free(r1);
+  roaring64_bitmap_free(r2);
   sqlite3_result_int64(context, nOut);
 }
 
@@ -816,9 +816,9 @@ static void roaringOrLengthFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -830,8 +830,8 @@ static void roaringOrLengthFunc(
     return;
   }
   int nOut = (int) roaring_bitmap_or_cardinality(r1, r2);
-  roaring_bitmap_free(r1);  
-  roaring_bitmap_free(r2);  
+  roaring_bitmap_free(r1);
+  roaring_bitmap_free(r2);
   sqlite3_result_int(context, nOut);
 }
 
@@ -841,9 +841,9 @@ static void roaring64OrLengthFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -855,8 +855,8 @@ static void roaring64OrLengthFunc(
     return;
   }
   int nOut = (int) roaring64_bitmap_or_cardinality(r1, r2);
-  roaring64_bitmap_free(r1);  
-  roaring64_bitmap_free(r2);  
+  roaring64_bitmap_free(r1);
+  roaring64_bitmap_free(r2);
   sqlite3_result_int(context, nOut);
 }
 
@@ -872,9 +872,9 @@ static void roaringOrFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -890,9 +890,9 @@ static void roaringOrFunc(
   nSize = (int) roaring_bitmap_size_in_bytes(r1);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(r1, pOut);
-  roaring_bitmap_free(r1);  
-  roaring_bitmap_free(r2);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring_bitmap_free(r1);
+  roaring_bitmap_free(r2);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 static void roaring64OrFunc(
@@ -901,9 +901,9 @@ static void roaring64OrFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn1;
-  unsigned int nIn1;  
+  unsigned int nIn1;
   const unsigned char *pIn2;
-  unsigned int nIn2;  
+  unsigned int nIn2;
   pIn1 = sqlite3_value_blob(argv[0]);
   nIn1 = sqlite3_value_bytes(argv[0]);
   pIn2 = sqlite3_value_blob(argv[1]);
@@ -919,16 +919,16 @@ static void roaring64OrFunc(
   nSize = (int) roaring64_bitmap_portable_size_in_bytes(r1);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring64_bitmap_portable_serialize(r1, pOut);
-  roaring64_bitmap_free(r1);  
-  roaring64_bitmap_free(r2);  
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring64_bitmap_free(r1);
+  roaring64_bitmap_free(r2);
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 /*********************************************
   rb_group_and(col)
   --------------------------------------------
   and all the values in col
-  
+
   example: SELECT rb_group_and(col) FROM table
 *********************************************/
 
@@ -939,9 +939,7 @@ static void roaringAndAllStep(
 ){
 
   const unsigned char *pIn;
-  unsigned int nIn;  
-  //const unsigned char *pInAnd;
-  //unsigned int nInAnd;
+  unsigned int nIn;
   RoaringContext *rc;
   rc = (RoaringContext*)sqlite3_aggregate_context(context, sizeof(*rc));
   pIn = sqlite3_value_blob(argv[0]);
@@ -973,14 +971,14 @@ static void roaringAndAllFinal(sqlite3_context *context){
   rc = (RoaringContext*)sqlite3_aggregate_context(context, sizeof(*rc));
   if(rc->rb == NULL){
     // no rb was created, must be an empty result set
-    rc->rb = roaring_bitmap_create();    
+    rc->rb = roaring_bitmap_create();
   }
   nSize = (int) roaring_bitmap_size_in_bytes(rc->rb);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(rc->rb, pOut);
-  roaring_bitmap_free(rc->rb); 
-  memset(rc, 0, sizeof(*rc)); 
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring_bitmap_free(rc->rb);
+  memset(rc, 0, sizeof(*rc));
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 static void roaring64AndAllStep(
@@ -990,9 +988,7 @@ static void roaring64AndAllStep(
 ){
 
   const unsigned char *pIn;
-  unsigned int nIn;  
-  //const unsigned char *pInAnd;
-  //unsigned int nInAnd;
+  unsigned int nIn;
   Roaring64Context *rc;
   rc = (Roaring64Context*)sqlite3_aggregate_context(context, sizeof(*rc));
   pIn = sqlite3_value_blob(argv[0]);
@@ -1023,14 +1019,14 @@ static void roaring64AndAllFinal(sqlite3_context *context){
   rc = (Roaring64Context*)sqlite3_aggregate_context(context, sizeof(*rc));
   if(rc->rb == NULL){
     // no rb was created, must be an empty result set
-    rc->rb = roaring64_bitmap_create();    
+    rc->rb = roaring64_bitmap_create();
   }
   nSize = (int64_t) roaring64_bitmap_portable_size_in_bytes(rc->rb);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int64_t) roaring64_bitmap_portable_serialize(rc->rb, pOut);
-  roaring64_bitmap_free(rc->rb); 
-  memset(rc, 0, sizeof(*rc)); 
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring64_bitmap_free(rc->rb);
+  memset(rc, 0, sizeof(*rc));
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 
@@ -1038,7 +1034,7 @@ static void roaring64AndAllFinal(sqlite3_context *context){
   rb_group_or(col)
   --------------------------------------------
   or all the values in col
-  
+
   example: SELECT rb_group_or(col) FROM table
 *********************************************/
 static void roaringOrAllStep(
@@ -1048,9 +1044,7 @@ static void roaringOrAllStep(
 ){
 
   const unsigned char *pIn;
-  unsigned int nIn;  
-  //const unsigned char *pInAnd;
-  //unsigned int nInAnd;
+  unsigned int nIn;
   RoaringContext *rc;
   rc = (RoaringContext*)sqlite3_aggregate_context(context, sizeof(*rc));
   if(rc->init == 0){
@@ -1074,14 +1068,14 @@ static void roaringOrAllFinal(sqlite3_context *context){
   rc = (RoaringContext*)sqlite3_aggregate_context(context, sizeof(*rc));
   if(rc->rb == NULL){
     // no rb was created, must be an empty result set
-    rc->rb = roaring_bitmap_create();    
+    rc->rb = roaring_bitmap_create();
   }
   nSize = (int) roaring_bitmap_size_in_bytes(rc->rb);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int) roaring_bitmap_serialize(rc->rb, pOut);
-  roaring_bitmap_free(rc->rb); 
-  memset(rc, 0, sizeof(*rc)); 
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring_bitmap_free(rc->rb);
+  memset(rc, 0, sizeof(*rc));
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 static void roaring64OrAllStep(
@@ -1091,9 +1085,7 @@ static void roaring64OrAllStep(
 ){
 
   const unsigned char *pIn;
-  unsigned int nIn;  
-  //const unsigned char *pInAnd;
-  //unsigned int nInAnd;
+  unsigned int nIn;
   Roaring64Context *rc;
   rc = (Roaring64Context*)sqlite3_aggregate_context(context, sizeof(*rc));
   if(rc->init == 0){
@@ -1117,14 +1109,14 @@ static void roaring64OrAllFinal(sqlite3_context *context){
   rc = (Roaring64Context*)sqlite3_aggregate_context(context, sizeof(*rc));
   if(rc->rb == NULL){
     // no rb was created, must be an empty result set
-    rc->rb = roaring64_bitmap_create();    
+    rc->rb = roaring64_bitmap_create();
   }
   nSize = (int64_t) roaring64_bitmap_portable_size_in_bytes(rc->rb);
   char *pOut = sqlite3_malloc(nSize);
   nOut = (int64_t) roaring64_bitmap_portable_serialize(rc->rb, pOut);
-  roaring64_bitmap_free(rc->rb); 
-  memset(rc, 0, sizeof(*rc)); 
-  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);  
+  roaring64_bitmap_free(rc->rb);
+  memset(rc, 0, sizeof(*rc));
+  sqlite3_result_blob(context, pOut, nOut, sqlite3_free);
 }
 
 
@@ -1151,7 +1143,7 @@ static void roaringArrayFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   pIn = sqlite3_value_blob(argv[0]);
   nIn = sqlite3_value_bytes(argv[0]);
   roaring_bitmap_t *r = roaring_bitmap_deserialize_safe(pIn, nIn);
@@ -1163,7 +1155,7 @@ static void roaringArrayFunc(
   uint32_t *ids;
   ids = sqlite3_malloc(nSize * sizeof(uint32_t));
   roaring_bitmap_to_uint32_array(r, ids);
-  roaring_bitmap_free(r); 
+  roaring_bitmap_free(r);
   sqlite3_result_pointer(context, ids, "carray", (void*)roaringArrayFreeFunc);
 }
 
@@ -1174,7 +1166,7 @@ static void roaring64ArrayFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   pIn = sqlite3_value_blob(argv[0]);
   nIn = sqlite3_value_bytes(argv[0]);
   roaring64_bitmap_t *r = roaring64_bitmap_portable_deserialize_safe(pIn, nIn);
@@ -1186,7 +1178,7 @@ static void roaring64ArrayFunc(
   uint64_t *ids;
   ids = sqlite3_malloc(nSize * sizeof(uint64_t));
   roaring64_bitmap_to_uint64_array(r, ids);
-  roaring64_bitmap_free(r); 
+  roaring64_bitmap_free(r);
   sqlite3_result_pointer(context, ids, "carray", (void*)roaring64ArrayFreeFunc);
 }
 
@@ -1202,7 +1194,7 @@ static void roaringLengthFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   pIn = sqlite3_value_blob(argv[0]);
   nIn = sqlite3_value_bytes(argv[0]);
   roaring_bitmap_t *r = roaring_bitmap_deserialize_safe(pIn, nIn);
@@ -1211,7 +1203,7 @@ static void roaringLengthFunc(
     return;
   }
   int nSize = roaring_bitmap_get_cardinality(r);
-  roaring_bitmap_free(r); 
+  roaring_bitmap_free(r);
   sqlite3_result_int(context, nSize);
 }
 
@@ -1221,7 +1213,7 @@ static void roaring64LengthFunc(
   sqlite3_value **argv
 ){
   const unsigned char *pIn;
-  unsigned int nIn;  
+  unsigned int nIn;
   pIn = sqlite3_value_blob(argv[0]);
   nIn = sqlite3_value_bytes(argv[0]);
   roaring64_bitmap_t *r = roaring64_bitmap_portable_deserialize_safe(pIn, nIn);
@@ -1230,8 +1222,90 @@ static void roaring64LengthFunc(
     return;
   }
   int64_t nSize = roaring64_bitmap_get_cardinality(r);
-  roaring64_bitmap_free(r); 
+  roaring64_bitmap_free(r);
   sqlite3_result_int64(context, nSize);
+}
+
+/* ── rb_contains(bitmap BLOB, value INTEGER) → 0|1 ──────────────────────────
+**
+** Returns 1 if value is present in the bitmap, 0 otherwise.
+** Returns 0 for NULL bitmap, 0 for out-of-range values (< 0 or > UINT32_MAX).
+**
+** Caches the deserialized bitmap in SQLite auxdata against argument 0 so
+** that repeated calls within the same prepared statement only deserialize
+** the bitmap once.
+**
+** Usage: SELECT rb_contains(bitmap_blob, value)
+*/
+static void rbContainsFunc(
+  sqlite3_context *ctx,
+  int argc,
+  sqlite3_value **argv
+){
+  (void)argc;
+  if( sqlite3_value_type(argv[0])==SQLITE_NULL ){
+    sqlite3_result_int(ctx, 0);
+    return;
+  }
+  if( sqlite3_value_type(argv[1])==SQLITE_NULL ){
+    sqlite3_result_int(ctx, 0);
+    return;
+  }
+  sqlite3_int64 v = sqlite3_value_int64(argv[1]);
+  if( v < 0 || v > (sqlite3_int64)4294967295LL ){
+    sqlite3_result_int(ctx, 0);
+    return;
+  }
+  roaring_bitmap_t *bm = (roaring_bitmap_t*)sqlite3_get_auxdata(ctx, 0);
+  if( !bm ){
+    bm = roaring_bitmap_deserialize_safe(
+      sqlite3_value_blob(argv[0]),
+      (size_t)sqlite3_value_bytes(argv[0]));
+    if( !bm ){
+      sqlite3_result_error(ctx, "rb_contains: invalid bitmap", -1);
+      return;
+    }
+    sqlite3_set_auxdata(ctx, 0, bm, (void(*)(void*))roaring_bitmap_free);
+  }
+  sqlite3_result_int(ctx, roaring_bitmap_contains(bm, (uint32_t)v));
+}
+
+/* rb64_contains(bitmap BLOB, value INTEGER) → 0|1
+**
+** 64-bit variant of rb_contains. SQLite integers are signed 64-bit;
+** values < 0 cannot be present in a 64-bit unsigned bitmap and return 0.
+*/
+static void rb64ContainsFunc(
+  sqlite3_context *ctx,
+  int argc,
+  sqlite3_value **argv
+){
+  (void)argc;
+  if( sqlite3_value_type(argv[0])==SQLITE_NULL ){
+    sqlite3_result_int(ctx, 0);
+    return;
+  }
+  if( sqlite3_value_type(argv[1])==SQLITE_NULL ){
+    sqlite3_result_int(ctx, 0);
+    return;
+  }
+  sqlite3_int64 v = sqlite3_value_int64(argv[1]);
+  if( v < 0 ){
+    sqlite3_result_int(ctx, 0);
+    return;
+  }
+  roaring64_bitmap_t *bm = (roaring64_bitmap_t*)sqlite3_get_auxdata(ctx, 0);
+  if( !bm ){
+    bm = roaring64_bitmap_portable_deserialize_safe(
+      sqlite3_value_blob(argv[0]),
+      (size_t)sqlite3_value_bytes(argv[0]));
+    if( !bm ){
+      sqlite3_result_error(ctx, "rb64_contains: invalid bitmap", -1);
+      return;
+    }
+    sqlite3_set_auxdata(ctx, 0, bm, (void(*)(void*))roaring64_bitmap_free);
+  }
+  sqlite3_result_int(ctx, roaring64_bitmap_contains(bm, (uint64_t)v));
 }
 
 #ifdef _WIN32
@@ -1241,17 +1315,29 @@ __declspec(dllexport)
 /* ── rb_each(bitmap BLOB) ────────────────────────────────────────────────────
 **
 ** Table-valued function returning one row per integer in a roaring bitmap.
-** Uses a fixed 4K-value staging buffer filled via roaring_uint32_iterator_read
-** — O(1) peak memory with bulk-extraction throughput.  The buffer size targets
-** L1 cache (4K uint32 = 16 KB; L1D is typically 32-64 KB) so the buffer
-** stays hot between the roaring fill and the SQLite xColumn drain.
 **
-** Usage:  SELECT value FROM rb_each(bitmap_blob)
+** Supports ORDER BY value ASC and ORDER BY value DESC via orderByConsumed.
+** For ascending order, uses a fixed 4K-value staging buffer filled via
+** roaring_uint32_iterator_read (bulk, cache-friendly). For descending order,
+** uses roaring_iterator_init_last and roaring_uint32_iterator_previous.
+**
+** Usage:
+**   SELECT value FROM rb_each(bitmap_blob)
+**   SELECT value FROM rb_each(bitmap_blob) ORDER BY value ASC
+**   SELECT value FROM rb_each(bitmap_blob) ORDER BY value DESC
 */
 
 #ifndef SQLITE_OMIT_VIRTUALTABLE
 
-#define RB_EACH_CHUNK (4u * 1024u)
+#define RB_EACH_CHUNK     (4u * 1024u)
+#define RB_ROWS_UNLIMITED UINT64_MAX
+
+/* idxNum bit flags */
+#define RB_EACH_IDX_HAS_BITMAP  0x01
+#define RB_EACH_IDX_ORDER_ASC   0x02
+#define RB_EACH_IDX_ORDER_DESC  0x04
+#define RB_EACH_IDX_HAS_OFFSET  0x08
+#define RB_EACH_IDX_HAS_LIMIT   0x10
 
 typedef struct RbEachVtab   RbEachVtab;
 typedef struct RbEachCursor RbEachCursor;
@@ -1262,12 +1348,14 @@ struct RbEachVtab {
 
 struct RbEachCursor {
   sqlite3_vtab_cursor       base;
-  roaring_uint32_iterator_t it;
+  roaring_uint32_iterator_t it;       /* forward or reverse iterator (stack) */
   roaring_bitmap_t         *bm;
-  uint32_t                 *buf;
+  uint32_t                 *buf;      /* NULL in reverse mode */
   uint32_t                  cap;
   uint32_t                  nBuf;
   uint32_t                  iBuf;
+  uint64_t                  rowsLeft; /* RB_ROWS_UNLIMITED or countdown */
+  uint8_t                   reverse;  /* 0=forward, 1=reverse */
 };
 
 static int rbEachConnect(
@@ -1315,21 +1403,38 @@ static int rbEachClose(sqlite3_vtab_cursor *cur){
 }
 
 static int rbEachBestIndex(sqlite3_vtab *pUnused, sqlite3_index_info *pIdx){
-  int i;
+  int i, idxNum = 0;
   (void)pUnused;
+
   for( i=0; i<pIdx->nConstraint; i++ ){
     if( pIdx->aConstraint[i].iColumn != 1 ) continue;
     if( pIdx->aConstraint[i].op != SQLITE_INDEX_CONSTRAINT_EQ ) continue;
     if( !pIdx->aConstraint[i].usable ) continue;
     pIdx->aConstraintUsage[i].argvIndex = 1;
     pIdx->aConstraintUsage[i].omit      = 1;
-    pIdx->idxNum        = 1;
-    pIdx->estimatedRows = 1000;
-    pIdx->estimatedCost = 1.0;
+    idxNum |= RB_EACH_IDX_HAS_BITMAP;
+    break;
+  }
+
+  if( !(idxNum & RB_EACH_IDX_HAS_BITMAP) ){
+    pIdx->estimatedRows = 1000000000;
+    pIdx->estimatedCost = 1e18;
     return SQLITE_OK;
   }
-  pIdx->estimatedRows = 0;
-  pIdx->estimatedCost = 1.0;
+
+  /* Consume ORDER BY value ASC or DESC */
+  if( pIdx->nOrderBy==1 && pIdx->aOrderBy[0].iColumn==0 ){
+    if( pIdx->aOrderBy[0].desc ){
+      idxNum |= RB_EACH_IDX_ORDER_DESC;
+    } else {
+      idxNum |= RB_EACH_IDX_ORDER_ASC;
+    }
+    pIdx->orderByConsumed = 1;
+  }
+
+  pIdx->idxNum        = idxNum;
+  pIdx->estimatedRows = 100000;
+  pIdx->estimatedCost = 100000.0;
   return SQLITE_OK;
 }
 
@@ -1344,7 +1449,10 @@ static int rbEachFilter(
   if( pCur->bm  ){ roaring_bitmap_free(pCur->bm); pCur->bm  = NULL; }
   if( pCur->buf ){ sqlite3_free(pCur->buf);        pCur->buf = NULL; }
   pCur->nBuf = pCur->iBuf = pCur->cap = 0;
+  pCur->rowsLeft = RB_ROWS_UNLIMITED;
+  pCur->reverse  = 0;
 
+  if( !(idxNum & RB_EACH_IDX_HAS_BITMAP) ) return SQLITE_OK;
   if( argc<1 || sqlite3_value_type(argv[0])==SQLITE_NULL ) return SQLITE_OK;
 
   pCur->bm = roaring_bitmap_deserialize_safe(
@@ -1358,37 +1466,59 @@ static int rbEachFilter(
   card = roaring_bitmap_get_cardinality(pCur->bm);
   if( card==0 ) return SQLITE_OK;
 
-  pCur->cap = (uint32_t)(card < RB_EACH_CHUNK ? card : RB_EACH_CHUNK);
-  pCur->buf = (uint32_t *)sqlite3_malloc64(pCur->cap * sizeof(uint32_t));
-  if( !pCur->buf ){ roaring_bitmap_free(pCur->bm); pCur->bm=NULL; return SQLITE_NOMEM; }
-
-  roaring_iterator_init(pCur->bm, &pCur->it);
-  pCur->nBuf = roaring_uint32_iterator_read(&pCur->it, pCur->buf, pCur->cap);
+  if( idxNum & RB_EACH_IDX_ORDER_DESC ){
+    pCur->reverse = 1;
+    roaring_iterator_init_last(pCur->bm, &pCur->it);
+  } else {
+    pCur->cap = (uint32_t)(card < RB_EACH_CHUNK ? card : RB_EACH_CHUNK);
+    pCur->buf = (uint32_t*)sqlite3_malloc64(pCur->cap * sizeof(uint32_t));
+    if( !pCur->buf ){
+      roaring_bitmap_free(pCur->bm); pCur->bm = NULL;
+      return SQLITE_NOMEM;
+    }
+    roaring_iterator_init(pCur->bm, &pCur->it);
+    pCur->nBuf = roaring_uint32_iterator_read(&pCur->it, pCur->buf, pCur->cap);
+  }
   return SQLITE_OK;
 }
 
 static int rbEachNext(sqlite3_vtab_cursor *cur){
   RbEachCursor *pCur = (RbEachCursor *)cur;
-  if( ++pCur->iBuf >= pCur->nBuf ){
-    pCur->nBuf = roaring_uint32_iterator_read(&pCur->it, pCur->buf, pCur->cap);
-    pCur->iBuf = 0;
+  if( pCur->rowsLeft != RB_ROWS_UNLIMITED ){
+    if( pCur->rowsLeft > 0 ) pCur->rowsLeft--;
+    if( pCur->rowsLeft == 0 ) return SQLITE_OK;
+  }
+  if( pCur->reverse ){
+    roaring_uint32_iterator_previous(&pCur->it);
+  } else {
+    if( ++pCur->iBuf >= pCur->nBuf ){
+      pCur->nBuf = roaring_uint32_iterator_read(&pCur->it, pCur->buf, pCur->cap);
+      pCur->iBuf = 0;
+    }
   }
   return SQLITE_OK;
 }
 
 static int rbEachEof(sqlite3_vtab_cursor *cur){
-  return ((RbEachCursor *)cur)->nBuf == 0;
+  RbEachCursor *pCur = (RbEachCursor *)cur;
+  if( pCur->rowsLeft == 0 ) return 1;
+  if( pCur->reverse ) return !pCur->it.has_value;
+  return pCur->nBuf == 0;
 }
 
 static int rbEachColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int col){
   RbEachCursor *pCur = (RbEachCursor *)cur;
-  if( col==0 ) sqlite3_result_int64(ctx, (sqlite3_int64)pCur->buf[pCur->iBuf]);
+  if( col==0 ){
+    uint32_t v = pCur->reverse ? pCur->it.current_value : pCur->buf[pCur->iBuf];
+    sqlite3_result_int64(ctx, (sqlite3_int64)v);
+  }
   return SQLITE_OK;
 }
 
 static int rbEachRowid(sqlite3_vtab_cursor *cur, sqlite_int64 *pRowid){
   RbEachCursor *pCur = (RbEachCursor *)cur;
-  *pRowid = (sqlite_int64)pCur->buf[pCur->iBuf];
+  *pRowid = pCur->reverse ? (sqlite_int64)pCur->it.current_value
+                          : (sqlite_int64)pCur->buf[pCur->iBuf];
   return SQLITE_OK;
 }
 
@@ -1418,10 +1548,12 @@ static sqlite3_module rbEachModule = {
 /* ── rb64_each(bitmap BLOB) ──────────────────────────────────────────────────
 **
 ** Table-valued function returning one row per integer in a roaring64 bitmap.
-** Mirrors rb_each but operates on 64-bit bitmaps using roaring64_iterator_t
-** (heap-allocated) and a uint64_t staging buffer.
+** Supports ORDER BY value ASC and ORDER BY value DESC via orderByConsumed.
 **
-** Usage:  SELECT value FROM rb64_each(bitmap_blob)
+** Usage:
+**   SELECT value FROM rb64_each(bitmap_blob)
+**   SELECT value FROM rb64_each(bitmap_blob) ORDER BY value ASC
+**   SELECT value FROM rb64_each(bitmap_blob) ORDER BY value DESC
 */
 
 #ifndef SQLITE_OMIT_VIRTUALTABLE
@@ -1437,12 +1569,14 @@ struct Rb64EachVtab {
 
 struct Rb64EachCursor {
   sqlite3_vtab_cursor  base;
-  roaring64_iterator_t *it;
+  roaring64_iterator_t *it;       /* heap-allocated; NULL until Filter */
   roaring64_bitmap_t   *bm;
-  uint64_t             *buf;
+  uint64_t             *buf;      /* NULL in reverse mode */
   uint32_t              cap;
   uint64_t              nBuf;
   uint64_t              iBuf;
+  uint64_t              rowsLeft; /* RB_ROWS_UNLIMITED or countdown */
+  uint8_t               reverse;  /* 0=forward, 1=reverse */
 };
 
 static int rb64EachConnect(
@@ -1491,21 +1625,38 @@ static int rb64EachClose(sqlite3_vtab_cursor *cur){
 }
 
 static int rb64EachBestIndex(sqlite3_vtab *pUnused, sqlite3_index_info *pIdx){
-  int i;
+  int i, idxNum = 0;
   (void)pUnused;
+
   for( i=0; i<pIdx->nConstraint; i++ ){
     if( pIdx->aConstraint[i].iColumn != 1 ) continue;
     if( pIdx->aConstraint[i].op != SQLITE_INDEX_CONSTRAINT_EQ ) continue;
     if( !pIdx->aConstraint[i].usable ) continue;
     pIdx->aConstraintUsage[i].argvIndex = 1;
     pIdx->aConstraintUsage[i].omit      = 1;
-    pIdx->idxNum        = 1;
-    pIdx->estimatedRows = 1000;
-    pIdx->estimatedCost = 1.0;
+    idxNum |= RB_EACH_IDX_HAS_BITMAP;
+    break;
+  }
+
+  if( !(idxNum & RB_EACH_IDX_HAS_BITMAP) ){
+    pIdx->estimatedRows = 1000000000;
+    pIdx->estimatedCost = 1e18;
     return SQLITE_OK;
   }
-  pIdx->estimatedRows = 0;
-  pIdx->estimatedCost = 1.0;
+
+  /* Consume ORDER BY value ASC or DESC */
+  if( pIdx->nOrderBy==1 && pIdx->aOrderBy[0].iColumn==0 ){
+    if( pIdx->aOrderBy[0].desc ){
+      idxNum |= RB_EACH_IDX_ORDER_DESC;
+    } else {
+      idxNum |= RB_EACH_IDX_ORDER_ASC;
+    }
+    pIdx->orderByConsumed = 1;
+  }
+
+  pIdx->idxNum        = idxNum;
+  pIdx->estimatedRows = 100000;
+  pIdx->estimatedCost = 100000.0;
   return SQLITE_OK;
 }
 
@@ -1521,7 +1672,10 @@ static int rb64EachFilter(
   if( pCur->bm  ){ roaring64_bitmap_free(pCur->bm);   pCur->bm  = NULL; }
   if( pCur->buf ){ sqlite3_free(pCur->buf);            pCur->buf = NULL; }
   pCur->nBuf = pCur->iBuf = pCur->cap = 0;
+  pCur->rowsLeft = RB_ROWS_UNLIMITED;
+  pCur->reverse  = 0;
 
+  if( !(idxNum & RB_EACH_IDX_HAS_BITMAP) ) return SQLITE_OK;
   if( argc<1 || sqlite3_value_type(argv[0])==SQLITE_NULL ) return SQLITE_OK;
 
   pCur->bm = roaring64_bitmap_portable_deserialize_safe(
@@ -1535,38 +1689,70 @@ static int rb64EachFilter(
   card = roaring64_bitmap_get_cardinality(pCur->bm);
   if( card==0 ) return SQLITE_OK;
 
-  pCur->cap = (uint32_t)(card < RB64_EACH_CHUNK ? (uint32_t)card : RB64_EACH_CHUNK);
-  pCur->buf = (uint64_t *)sqlite3_malloc64(pCur->cap * sizeof(uint64_t));
-  if( !pCur->buf ){ roaring64_bitmap_free(pCur->bm); pCur->bm=NULL; return SQLITE_NOMEM; }
-
-  pCur->it = roaring64_iterator_create(pCur->bm);
-  if( !pCur->it ){ sqlite3_free(pCur->buf); pCur->buf=NULL; roaring64_bitmap_free(pCur->bm); pCur->bm=NULL; return SQLITE_NOMEM; }
-  pCur->nBuf = roaring64_iterator_read(pCur->it, pCur->buf, pCur->cap);
+  if( idxNum & RB_EACH_IDX_ORDER_DESC ){
+    pCur->reverse = 1;
+    pCur->it = roaring64_iterator_create_last(pCur->bm);
+    if( !pCur->it ){
+      roaring64_bitmap_free(pCur->bm); pCur->bm = NULL;
+      return SQLITE_NOMEM;
+    }
+  } else {
+    pCur->cap = (uint32_t)(card < RB64_EACH_CHUNK ? (uint32_t)card : RB64_EACH_CHUNK);
+    pCur->buf = (uint64_t*)sqlite3_malloc64(pCur->cap * sizeof(uint64_t));
+    if( !pCur->buf ){
+      roaring64_bitmap_free(pCur->bm); pCur->bm = NULL;
+      return SQLITE_NOMEM;
+    }
+    pCur->it = roaring64_iterator_create(pCur->bm);
+    if( !pCur->it ){
+      sqlite3_free(pCur->buf); pCur->buf = NULL;
+      roaring64_bitmap_free(pCur->bm); pCur->bm = NULL;
+      return SQLITE_NOMEM;
+    }
+    pCur->nBuf = roaring64_iterator_read(pCur->it, pCur->buf, pCur->cap);
+  }
   return SQLITE_OK;
 }
 
 static int rb64EachNext(sqlite3_vtab_cursor *cur){
   Rb64EachCursor *pCur = (Rb64EachCursor *)cur;
-  if( ++pCur->iBuf >= pCur->nBuf ){
-    pCur->nBuf = roaring64_iterator_read(pCur->it, pCur->buf, pCur->cap);
-    pCur->iBuf = 0;
+  if( pCur->rowsLeft != RB_ROWS_UNLIMITED ){
+    if( pCur->rowsLeft > 0 ) pCur->rowsLeft--;
+    if( pCur->rowsLeft == 0 ) return SQLITE_OK;
+  }
+  if( pCur->reverse ){
+    roaring64_iterator_previous(pCur->it);
+  } else {
+    if( ++pCur->iBuf >= pCur->nBuf ){
+      pCur->nBuf = roaring64_iterator_read(pCur->it, pCur->buf, pCur->cap);
+      pCur->iBuf = 0;
+    }
   }
   return SQLITE_OK;
 }
 
 static int rb64EachEof(sqlite3_vtab_cursor *cur){
-  return ((Rb64EachCursor *)cur)->nBuf == 0;
+  Rb64EachCursor *pCur = (Rb64EachCursor *)cur;
+  if( pCur->rowsLeft == 0 ) return 1;
+  if( pCur->reverse ) return !roaring64_iterator_has_value(pCur->it);
+  return pCur->nBuf == 0;
 }
 
 static int rb64EachColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int col){
   Rb64EachCursor *pCur = (Rb64EachCursor *)cur;
-  if( col==0 ) sqlite3_result_int64(ctx, (sqlite3_int64)pCur->buf[pCur->iBuf]);
+  if( col==0 ){
+    uint64_t v = pCur->reverse ? roaring64_iterator_value(pCur->it)
+                               : pCur->buf[pCur->iBuf];
+    sqlite3_result_int64(ctx, (sqlite3_int64)v);
+  }
   return SQLITE_OK;
 }
 
 static int rb64EachRowid(sqlite3_vtab_cursor *cur, sqlite_int64 *pRowid){
   Rb64EachCursor *pCur = (Rb64EachCursor *)cur;
-  *pRowid = (sqlite_int64)pCur->buf[pCur->iBuf];
+  uint64_t v = pCur->reverse ? roaring64_iterator_value(pCur->it)
+                             : pCur->buf[pCur->iBuf];
+  *pRowid = (sqlite_int64)v;
   return SQLITE_OK;
 }
 
@@ -1584,6 +1770,244 @@ static sqlite3_module rb64EachModule = {
   rb64EachEof,        /* xEof */
   rb64EachColumn,     /* xColumn */
   rb64EachRowid,      /* xRowid */
+  0,                  /* xUpdate */
+  0, 0, 0, 0,         /* xBegin..xRollback */
+  0,                  /* xFindMethod */
+  0,                  /* xRename */
+  0, 0, 0,            /* xSavepoint..xShadowName */
+};
+
+#endif /* SQLITE_OMIT_VIRTUALTABLE */
+
+/* ── rb_range / rb_range_desc ────────────────────────────────────────────────
+**
+** Table-valued functions for paged/sliced bitmap iteration.
+**
+** rb_range(bitmap, offset, limit)      → values in ascending order
+** rb_range_desc(bitmap, offset, limit) → values in descending order
+**
+** offset: number of values to skip (from start for ASC, from end for DESC)
+** limit:  maximum number of values to return
+**
+** Usage:
+**   SELECT value FROM rb_range(bitmap_blob, 1000, 20);
+**   SELECT value FROM rb_range_desc(bitmap_blob, 0, 10);
+**
+** Schema:
+**   value  INTEGER          -- visible output column
+**   bitmap BLOB    HIDDEN   -- input bitmap
+**   offset INTEGER HIDDEN   -- values to skip (default 0)
+**   lim    INTEGER HIDDEN   -- max values to return (default unlimited)
+**
+** Both rb_range and rb_range_desc advertise orderByConsumed for their
+** natural output order, so SQLite will not apply a redundant sort.
+**
+** The cursor type is RbEachCursor (reused from rb_each). The vtab struct
+** carries a descending flag to distinguish the two variants.
+*/
+
+#ifndef SQLITE_OMIT_VIRTUALTABLE
+
+typedef struct RbRangeVtab RbRangeVtab;
+struct RbRangeVtab {
+  sqlite3_vtab base;
+  uint8_t descending; /* 0 = rb_range, 1 = rb_range_desc */
+};
+
+static int rbRangeConnect(
+  sqlite3 *db,
+  void *pAux,
+  int argcUnused, const char *const *argvUnused,
+  sqlite3_vtab **ppVtab,
+  char **pzErrUnused
+){
+  int rc;
+  RbRangeVtab *pNew;
+  (void)argcUnused; (void)argvUnused; (void)pzErrUnused;
+  rc = sqlite3_declare_vtab(db,
+    "CREATE TABLE x("
+    "  value  INTEGER,"
+    "  bitmap BLOB    HIDDEN,"
+    "  offset INTEGER HIDDEN,"
+    "  lim    INTEGER HIDDEN"
+    ")");
+  if( rc==SQLITE_OK ){
+    pNew = sqlite3_malloc(sizeof(*pNew));
+    if( !pNew ) return SQLITE_NOMEM;
+    memset(pNew, 0, sizeof(*pNew));
+    pNew->descending = (pAux != 0);
+    sqlite3_vtab_config(db, SQLITE_VTAB_INNOCUOUS);
+    *ppVtab = &pNew->base;
+  }
+  return rc;
+}
+
+static int rbRangeDisconnect(sqlite3_vtab *pVtab){
+  sqlite3_free(pVtab);
+  return SQLITE_OK;
+}
+
+static int rbRangeBestIndex(sqlite3_vtab *pVtab, sqlite3_index_info *pIdx){
+  RbRangeVtab *pRange = (RbRangeVtab *)pVtab;
+  int i, idxNum = 0;
+  int iBitmap = -1, iOffset = -1, iLimit = -1;
+  int argIdx = 1;
+
+  for( i=0; i<pIdx->nConstraint; i++ ){
+    if( !pIdx->aConstraint[i].usable ) continue;
+    if( pIdx->aConstraint[i].op != SQLITE_INDEX_CONSTRAINT_EQ ) continue;
+    switch( pIdx->aConstraint[i].iColumn ){
+      case 1: if( iBitmap<0 ) iBitmap = i; break;
+      case 2: if( iOffset<0 ) iOffset = i; break;
+      case 3: if( iLimit<0  ) iLimit  = i; break;
+    }
+  }
+
+  if( iBitmap<0 ){
+    pIdx->estimatedRows = 1000000000;
+    pIdx->estimatedCost = 1e18;
+    return SQLITE_OK;
+  }
+
+  pIdx->aConstraintUsage[iBitmap].argvIndex = argIdx++;
+  pIdx->aConstraintUsage[iBitmap].omit      = 1;
+  idxNum |= RB_EACH_IDX_HAS_BITMAP;
+
+  if( iOffset>=0 ){
+    pIdx->aConstraintUsage[iOffset].argvIndex = argIdx++;
+    pIdx->aConstraintUsage[iOffset].omit      = 1;
+    idxNum |= RB_EACH_IDX_HAS_OFFSET;
+  }
+
+  if( iLimit>=0 ){
+    pIdx->aConstraintUsage[iLimit].argvIndex = argIdx++;
+    pIdx->aConstraintUsage[iLimit].omit      = 1;
+    idxNum |= RB_EACH_IDX_HAS_LIMIT;
+    pIdx->estimatedRows = 1000;
+    pIdx->estimatedCost = 1000.0;
+  } else {
+    pIdx->estimatedRows = 100000;
+    pIdx->estimatedCost = 100000.0;
+  }
+
+  /* Consume ORDER BY if it matches the natural output direction */
+  if( pIdx->nOrderBy==1 && pIdx->aOrderBy[0].iColumn==0 ){
+    int wantDesc = (int)pRange->descending;
+    if( (int)pIdx->aOrderBy[0].desc == wantDesc ){
+      pIdx->orderByConsumed = 1;
+    }
+  }
+
+  pIdx->idxNum = idxNum;
+  return SQLITE_OK;
+}
+
+static int rbRangeFilter(
+  sqlite3_vtab_cursor *cur,
+  int idxNum, const char *idxStr,
+  int argc, sqlite3_value **argv
+){
+  RbEachCursor *pCur    = (RbEachCursor *)cur;
+  RbRangeVtab  *pVtab   = (RbRangeVtab *)cur->pVtab;
+  uint64_t      card;
+  int           argIdx  = 0;
+  sqlite3_int64 offset  = 0;
+  sqlite3_int64 limit   = -1; /* -1 = unlimited */
+  (void)idxStr;
+
+  if( pCur->bm  ){ roaring_bitmap_free(pCur->bm); pCur->bm  = NULL; }
+  if( pCur->buf ){ sqlite3_free(pCur->buf);        pCur->buf = NULL; }
+  pCur->nBuf = pCur->iBuf = pCur->cap = 0;
+  pCur->rowsLeft = RB_ROWS_UNLIMITED;
+  pCur->reverse  = pVtab->descending;
+
+  if( !(idxNum & RB_EACH_IDX_HAS_BITMAP) ) return SQLITE_OK;
+  if( argc<1 || sqlite3_value_type(argv[argIdx])==SQLITE_NULL ){
+    argIdx++;
+    return SQLITE_OK;
+  }
+
+  pCur->bm = roaring_bitmap_deserialize_safe(
+      sqlite3_value_blob(argv[argIdx]),
+      (size_t)sqlite3_value_bytes(argv[argIdx]));
+  argIdx++;
+  if( !pCur->bm ){
+    cur->pVtab->zErrMsg = sqlite3_mprintf("rb_range: invalid bitmap");
+    return SQLITE_ERROR;
+  }
+
+  if( idxNum & RB_EACH_IDX_HAS_OFFSET ){
+    if( sqlite3_value_type(argv[argIdx])!=SQLITE_NULL ){
+      offset = sqlite3_value_int64(argv[argIdx]);
+      if( offset<0 ){
+        cur->pVtab->zErrMsg = sqlite3_mprintf("rb_range: offset must be >= 0");
+        roaring_bitmap_free(pCur->bm); pCur->bm = NULL;
+        return SQLITE_ERROR;
+      }
+    }
+    argIdx++;
+  }
+
+  if( idxNum & RB_EACH_IDX_HAS_LIMIT ){
+    if( sqlite3_value_type(argv[argIdx])!=SQLITE_NULL ){
+      limit = sqlite3_value_int64(argv[argIdx]);
+      if( limit<0 ){
+        cur->pVtab->zErrMsg = sqlite3_mprintf("rb_range: limit must be >= 0");
+        roaring_bitmap_free(pCur->bm); pCur->bm = NULL;
+        return SQLITE_ERROR;
+      }
+      if( limit==0 ){
+        return SQLITE_OK; /* zero rows */
+      }
+      pCur->rowsLeft = (uint64_t)limit;
+    }
+    argIdx++;
+  }
+
+  card = roaring_bitmap_get_cardinality(pCur->bm);
+  if( card==0 ) return SQLITE_OK;
+
+  if( pCur->reverse ){
+    roaring_iterator_init_last(pCur->bm, &pCur->it);
+    if( offset>0 ){
+      uint32_t sk = (uint32_t)(offset < (sqlite3_int64)0xFFFFFFFFu ? offset : (sqlite3_int64)0xFFFFFFFFu);
+      roaring_uint32_iterator_skip_backward(&pCur->it, sk);
+      if( !pCur->it.has_value ) return SQLITE_OK;
+    }
+  } else {
+    pCur->cap = RB_EACH_CHUNK;
+    pCur->buf = (uint32_t*)sqlite3_malloc64(pCur->cap * sizeof(uint32_t));
+    if( !pCur->buf ){
+      roaring_bitmap_free(pCur->bm); pCur->bm = NULL;
+      return SQLITE_NOMEM;
+    }
+    roaring_iterator_init(pCur->bm, &pCur->it);
+    if( offset>0 ){
+      uint32_t sk = (uint32_t)(offset < (sqlite3_int64)0xFFFFFFFFu ? offset : (sqlite3_int64)0xFFFFFFFFu);
+      roaring_uint32_iterator_skip(&pCur->it, sk);
+      if( !pCur->it.has_value ) return SQLITE_OK;
+    }
+    pCur->nBuf = roaring_uint32_iterator_read(&pCur->it, pCur->buf, pCur->cap);
+  }
+
+  return SQLITE_OK;
+}
+
+/* rbRangeOpen/Close/Next/Eof/Column/Rowid are shared with rb_each */
+static sqlite3_module rbRangeModule = {
+  0,                  /* iVersion */
+  rbRangeConnect,     /* xCreate (== xConnect → eponymous) */
+  rbRangeConnect,     /* xConnect */
+  rbRangeBestIndex,   /* xBestIndex */
+  rbRangeDisconnect,  /* xDisconnect */
+  rbRangeDisconnect,  /* xDestroy */
+  rbEachOpen,         /* xOpen  (reuses RbEachCursor) */
+  rbEachClose,        /* xClose (reuses RbEachCursor) */
+  rbRangeFilter,      /* xFilter */
+  rbEachNext,         /* xNext */
+  rbEachEof,          /* xEof */
+  rbEachColumn,       /* xColumn */
+  rbEachRowid,        /* xRowid */
   0,                  /* xUpdate */
   0, 0, 0, 0,         /* xBegin..xRollback */
   0,                  /* xFindMethod */
@@ -1614,7 +2038,9 @@ int sqlite3_roaring_init(
   rc = sqlite3_create_function(db, "rb_or_count", 2, flags, 0, roaringOrLengthFunc, 0, 0);
   rc = sqlite3_create_function(db, "rb_not_count", 2, flags, 0, roaringNotLengthFunc, 0, 0);
   rc = sqlite3_create_function(db, "rb_xor_count", 2, flags, 0, roaringXorLengthFunc, 0, 0);
-  // 64 bit versions
+  rc = sqlite3_create_function(db, "rb_contains", 2, flags, 0, rbContainsFunc, 0, 0);
+
+  // 64-bit scalar functions
   rc = sqlite3_create_function(db, "rb64_create", -1, flags, 0, roaring64CreateFunc, 0, 0);
   rc = sqlite3_create_function(db, "rb64_count", 1, flags, 0, roaring64LengthFunc, 0, 0);
   rc = sqlite3_create_function(db, "rb64_add", 2, flags, 0, roaring64AddFunc, 0, 0);
@@ -1627,25 +2053,28 @@ int sqlite3_roaring_init(
   rc = sqlite3_create_function(db, "rb64_or_count", 2, flags, 0, roaring64OrLengthFunc, 0, 0);
   rc = sqlite3_create_function(db, "rb64_not_count", 2, flags, 0, roaring64NotLengthFunc, 0, 0);
   rc = sqlite3_create_function(db, "rb64_xor_count", 2, flags, 0, roaring64XorLengthFunc, 0, 0);
+  rc = sqlite3_create_function(db, "rb64_contains", 2, flags, 0, rb64ContainsFunc, 0, 0);
 
   //rc = sqlite3_create_function(db, "rb_and_many", -1, flags, 0, roaringAndManyFunc, 0, 0);
   //rc = sqlite3_create_function(db, "rb_or_many", -1, flags, 0, roaringOrManyFunc, 0, 0);
-  // aggregate SQL functions
+  /* Aggregate SQL functions */
   rc = sqlite3_create_function(db, "rb_group_create", 1, flags, 0, 0, roaringCreateStep, roaringCreateFinal);
   rc = sqlite3_create_function(db, "rb_group_and", 1, flags, 0, 0, roaringAndAllStep, roaringAndAllFinal);
   rc = sqlite3_create_function(db, "rb_group_or", 1, flags, 0, 0, roaringOrAllStep, roaringOrAllFinal);
-  // 64 bit versions
+  /* 64-bit aggregate functions */
   rc = sqlite3_create_function(db, "rb64_group_create", 1, flags, 0, 0, roaring64CreateStep, roaring64CreateFinal);
   rc = sqlite3_create_function(db, "rb64_group_and", 1, flags, 0, 0, roaring64AndAllStep, roaring64AndAllFinal);
   rc = sqlite3_create_function(db, "rb64_group_or", 1, flags, 0, 0, roaring64OrAllStep, roaring64OrAllFinal);
 
-  // carray based SQL functions (for conversion to a virtual table)
+  /* carray-based functions */
   rc = sqlite3_create_function(db, "rb_array", 1, flags, 0, roaringArrayFunc, 0, 0);
-  // 64 bit version
   rc = sqlite3_create_function(db, "rb64_array", 1, flags, 0, roaring64ArrayFunc, 0, 0);
 #ifndef SQLITE_OMIT_VIRTUALTABLE
   rc = sqlite3_create_module(db, "rb_each", &rbEachModule, 0);
   rc = sqlite3_create_module(db, "rb64_each", &rb64EachModule, 0);
+  /* pAux=NULL → ascending (rb_range), pAux=non-NULL → descending (rb_range_desc) */
+  rc = sqlite3_create_module(db, "rb_range", &rbRangeModule, (void*)0);
+  rc = sqlite3_create_module(db, "rb_range_desc", &rbRangeModule, (void*)1);
 #endif
   return rc;
 }

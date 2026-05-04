@@ -56,8 +56,6 @@ db.load_extension("./libroaring")
 
 ## API
 
-34 SQL functions in total: 24 scalar, 6 aggregate, 4 table-valued.
-
 Each function has a 32-bit (`rb_*`) and a 64-bit (`rb64_*`) variant. The 64-bit variants accept and return `INTEGER` values up to `2^63 - 1` (SQLite's signed 64-bit range) and can store values beyond the 32-bit limit.
 
 ---
@@ -105,6 +103,17 @@ Returns a bitmap that is the difference (ANDNOT) of bitmap1 minus bitmap2.
 #### rb_not_count(bitmap1, bitmap2) / rb64_not_count(...)
 Returns the cardinality of the difference without materializing the bitmap.
 
+#### rb_contains(bitmap, value) / rb64_contains(bitmap, value)
+Returns `1` if `value` is present in the bitmap, `0` otherwise. Returns `0` for a `NULL` bitmap or an out-of-range value.
+
+```sql
+SELECT rb_contains(rb_create(1, 2, 3), 2); -- 1
+SELECT rb_contains(rb_create(1, 2, 3), 4); -- 0
+SELECT rb_contains(NULL, 1);               -- 0
+```
+
+The deserialized bitmap is cached in SQLite auxiliary data for the duration of the prepared statement, so calling `rb_contains` repeatedly with the same bitmap argument (e.g. in a `WHERE` clause over many rows) only deserializes once.
+
 ---
 
 ### Aggregate functions
@@ -127,7 +136,9 @@ ORs all bitmaps in a column. Faster than chaining `rb_or` pairwise.
 ### Table-valued functions
 
 #### rb_each(bitmap)
-Returns one row per element in a 32-bit bitmap. The single output column is `value INTEGER`.
+Returns one row per element in a 32-bit bitmap. The output column is `value INTEGER`.
+
+Iterates values in ascending order by default. Supports `ORDER BY value ASC` and `ORDER BY value DESC` with `orderByConsumed`, so SQLite will not apply a redundant sort.
 
 ```sql
 SELECT value FROM rb_each(rb_create(1, 2, 3));
@@ -135,7 +146,14 @@ SELECT value FROM rb_each(rb_create(1, 2, 3));
 -- 2
 -- 3
 
-SELECT sum(value) FROM rb_each(bitmap) WHERE value BETWEEN 100 AND 200;
+-- Descending, no extra sort step
+SELECT value FROM rb_each(rb_create(1, 2, 3)) ORDER BY value DESC;
+-- 3
+-- 2
+-- 1
+
+-- Descending with limit — stops early without scanning the full bitmap
+SELECT value FROM rb_each(bitmap) ORDER BY value DESC LIMIT 10;
 ```
 
 #### rb64_each(bitmap)
@@ -147,20 +165,86 @@ SELECT value FROM rb64_each(rb64_create(9000000000, 9000000001));
 -- 9000000001
 ```
 
-#### rb_array(bitmap)
-Serializes a 32-bit bitmap to a raw `int32` array for use with the [carray](https://www.sqlite.org/carray.html) extension.
+#### rb_range(bitmap, offset, limit) / rb_range_desc(bitmap, offset, limit)
+Returns a slice of sorted bitmap values without expanding the full bitmap.
+
+- `offset` — number of values to skip from the start (ascending) or end (descending). Must be ≥ 0.
+- `limit` — maximum number of values to return. Must be ≥ 0. Omit for no limit.
+
+`rb_range` advertises `orderByConsumed` for `ORDER BY value ASC`; `rb_range_desc` advertises it for `ORDER BY value DESC`.
+
+```sql
+-- Values at positions 10–29 (0-based)
+SELECT value FROM rb_range(bitmap, 10, 20);
+
+-- Last 20 values
+SELECT value FROM rb_range_desc(bitmap, 0, 20);
+
+-- Page 2 of 20, descending
+SELECT value FROM rb_range_desc(bitmap, 20, 20);
+```
+
+#### rb_array(bitmap) / rb64_array(bitmap)
+Serializes a bitmap to a raw integer array for use with the [carray](https://www.sqlite.org/carray.html) extension.
 
 ```sql
 .load ./carray
 SELECT sum(value) FROM carray(rb_array(bitmap), rb_count(bitmap));
 ```
 
-#### rb64_array(bitmap)
-Same as `rb_array` but produces an `int64` array.
+---
+
+## Choosing the right primitive
+
+**Use `rb_each(bitmap)`** when:
+- The bitmap is small
+- You need all values
+- The desired order is ascending integer value
+
+**Use `rb_contains(bitmap, value)`** when:
+- Another table or index should drive the scan order
+- The bitmap is large and you only need a small `LIMIT`
+- The desired order comes from an external index, not the bitmap itself
 
 ```sql
-SELECT sum(value) FROM carray(rb64_array(bitmap), rb64_count(bitmap), 'int64');
+-- Scan an ordered index, use the bitmap as a membership filter
+WITH bm AS MATERIALIZED (
+  SELECT rb_group_and(bitmap) AS b FROM bitmap_table WHERE key IN (?, ?)
+)
+SELECT t.*
+FROM bm JOIN ordered_table t INDEXED BY ordered_index
+WHERE rb_contains(bm.b, t.id)
+ORDER BY t.sort_key DESC
+LIMIT 20;
 ```
+
+**Use `rb_range(bitmap, offset, limit)`** when:
+- The bitmap's integer values are themselves the desired order (e.g. rank IDs, timestamp buckets)
+- You want cursor/page-style access into the bitmap without expanding it fully
+
+```sql
+-- Page 3 of results, 20 per page, ascending
+SELECT value FROM rb_range(bitmap, 40, 20);
+
+-- Top 20 by descending value
+SELECT value FROM rb_range_desc(bitmap, 0, 20);
+```
+
+---
+
+## NULL and error behaviour
+
+| Input | Behaviour |
+|---|---|
+| `NULL` bitmap in `rb_contains` | returns `0` |
+| `NULL` bitmap in table-valued functions | zero rows |
+| Invalid bitmap blob | SQLite error |
+| Value < 0 or > `UINT32_MAX` in 32-bit functions | returns `0` |
+| Value < 0 in 64-bit functions | returns `0` |
+| `rb_range` with negative offset or limit | SQLite error |
+| `rb_range` with `limit = 0` | zero rows |
+| `rb_range` with offset ≥ cardinality | zero rows |
+| `rb_first` / `rb_last` / `rb_nth` on empty bitmap | `NULL` |
 
 ---
 
