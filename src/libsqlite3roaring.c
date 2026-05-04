@@ -1238,9 +1238,364 @@ static void roaring64LengthFunc(
 __declspec(dllexport)
 #endif
 
+/* ── rb_each(bitmap BLOB) ────────────────────────────────────────────────────
+**
+** Table-valued function returning one row per integer in a roaring bitmap.
+** Uses a fixed 4K-value staging buffer filled via roaring_uint32_iterator_read
+** — O(1) peak memory with bulk-extraction throughput.  The buffer size targets
+** L1 cache (4K uint32 = 16 KB; L1D is typically 32-64 KB) so the buffer
+** stays hot between the roaring fill and the SQLite xColumn drain.
+**
+** Usage:  SELECT value FROM rb_each(bitmap_blob)
+*/
+
+#ifndef SQLITE_OMIT_VIRTUALTABLE
+
+#define RB_EACH_CHUNK (4u * 1024u)
+
+typedef struct RbEachVtab   RbEachVtab;
+typedef struct RbEachCursor RbEachCursor;
+
+struct RbEachVtab {
+  sqlite3_vtab base;
+};
+
+struct RbEachCursor {
+  sqlite3_vtab_cursor       base;
+  roaring_uint32_iterator_t it;
+  roaring_bitmap_t         *bm;
+  uint32_t                 *buf;
+  uint32_t                  cap;
+  uint32_t                  nBuf;
+  uint32_t                  iBuf;
+};
+
+static int rbEachConnect(
+  sqlite3 *db,
+  void *pUnused,
+  int argcUnused, const char *const *argvUnused,
+  sqlite3_vtab **ppVtab,
+  char **pzErrUnused
+){
+  int rc;
+  RbEachVtab *pNew;
+  (void)pUnused; (void)argcUnused; (void)argvUnused; (void)pzErrUnused;
+  rc = sqlite3_declare_vtab(db, "CREATE TABLE x(value INTEGER, bitmap BLOB HIDDEN)");
+  if( rc==SQLITE_OK ){
+    pNew = sqlite3_malloc(sizeof(*pNew));
+    if( !pNew ) return SQLITE_NOMEM;
+    memset(pNew, 0, sizeof(*pNew));
+    sqlite3_vtab_config(db, SQLITE_VTAB_INNOCUOUS);
+    *ppVtab = &pNew->base;
+  }
+  return rc;
+}
+
+static int rbEachDisconnect(sqlite3_vtab *pVtab){
+  sqlite3_free(pVtab);
+  return SQLITE_OK;
+}
+
+static int rbEachOpen(sqlite3_vtab *pUnused, sqlite3_vtab_cursor **ppCursor){
+  RbEachCursor *pCur;
+  (void)pUnused;
+  pCur = sqlite3_malloc(sizeof(*pCur));
+  if( !pCur ) return SQLITE_NOMEM;
+  memset(pCur, 0, sizeof(*pCur));
+  *ppCursor = &pCur->base;
+  return SQLITE_OK;
+}
+
+static int rbEachClose(sqlite3_vtab_cursor *cur){
+  RbEachCursor *pCur = (RbEachCursor *)cur;
+  if( pCur->bm  ) roaring_bitmap_free(pCur->bm);
+  if( pCur->buf ) sqlite3_free(pCur->buf);
+  sqlite3_free(pCur);
+  return SQLITE_OK;
+}
+
+static int rbEachBestIndex(sqlite3_vtab *pUnused, sqlite3_index_info *pIdx){
+  int i;
+  (void)pUnused;
+  for( i=0; i<pIdx->nConstraint; i++ ){
+    if( pIdx->aConstraint[i].iColumn != 1 ) continue;
+    if( pIdx->aConstraint[i].op != SQLITE_INDEX_CONSTRAINT_EQ ) continue;
+    if( !pIdx->aConstraint[i].usable ) continue;
+    pIdx->aConstraintUsage[i].argvIndex = 1;
+    pIdx->aConstraintUsage[i].omit      = 1;
+    pIdx->idxNum        = 1;
+    pIdx->estimatedRows = 1000;
+    pIdx->estimatedCost = 1.0;
+    return SQLITE_OK;
+  }
+  pIdx->estimatedRows = 0;
+  pIdx->estimatedCost = 1.0;
+  return SQLITE_OK;
+}
+
+static int rbEachFilter(
+  sqlite3_vtab_cursor *cur,
+  int idxNum, const char *idxStr,
+  int argc, sqlite3_value **argv
+){
+  RbEachCursor *pCur = (RbEachCursor *)cur;
+  uint64_t card;
+  (void)idxStr;
+  if( pCur->bm  ){ roaring_bitmap_free(pCur->bm); pCur->bm  = NULL; }
+  if( pCur->buf ){ sqlite3_free(pCur->buf);        pCur->buf = NULL; }
+  pCur->nBuf = pCur->iBuf = pCur->cap = 0;
+
+  if( argc<1 || sqlite3_value_type(argv[0])==SQLITE_NULL ) return SQLITE_OK;
+
+  pCur->bm = roaring_bitmap_deserialize_safe(
+      sqlite3_value_blob(argv[0]),
+      (size_t)sqlite3_value_bytes(argv[0]));
+  if( !pCur->bm ){
+    pCur->base.pVtab->zErrMsg = sqlite3_mprintf("rb_each: invalid bitmap");
+    return SQLITE_ERROR;
+  }
+
+  card = roaring_bitmap_get_cardinality(pCur->bm);
+  if( card==0 ) return SQLITE_OK;
+
+  pCur->cap = (uint32_t)(card < RB_EACH_CHUNK ? card : RB_EACH_CHUNK);
+  pCur->buf = (uint32_t *)sqlite3_malloc64(pCur->cap * sizeof(uint32_t));
+  if( !pCur->buf ){ roaring_bitmap_free(pCur->bm); pCur->bm=NULL; return SQLITE_NOMEM; }
+
+  roaring_iterator_init(pCur->bm, &pCur->it);
+  pCur->nBuf = roaring_uint32_iterator_read(&pCur->it, pCur->buf, pCur->cap);
+  return SQLITE_OK;
+}
+
+static int rbEachNext(sqlite3_vtab_cursor *cur){
+  RbEachCursor *pCur = (RbEachCursor *)cur;
+  if( ++pCur->iBuf >= pCur->nBuf ){
+    pCur->nBuf = roaring_uint32_iterator_read(&pCur->it, pCur->buf, pCur->cap);
+    pCur->iBuf = 0;
+  }
+  return SQLITE_OK;
+}
+
+static int rbEachEof(sqlite3_vtab_cursor *cur){
+  return ((RbEachCursor *)cur)->nBuf == 0;
+}
+
+static int rbEachColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int col){
+  RbEachCursor *pCur = (RbEachCursor *)cur;
+  if( col==0 ) sqlite3_result_int64(ctx, (sqlite3_int64)pCur->buf[pCur->iBuf]);
+  return SQLITE_OK;
+}
+
+static int rbEachRowid(sqlite3_vtab_cursor *cur, sqlite_int64 *pRowid){
+  RbEachCursor *pCur = (RbEachCursor *)cur;
+  *pRowid = (sqlite_int64)pCur->buf[pCur->iBuf];
+  return SQLITE_OK;
+}
+
+static sqlite3_module rbEachModule = {
+  0,                /* iVersion */
+  rbEachConnect,    /* xCreate (== xConnect → eponymous) */
+  rbEachConnect,    /* xConnect */
+  rbEachBestIndex,  /* xBestIndex */
+  rbEachDisconnect, /* xDisconnect */
+  rbEachDisconnect, /* xDestroy */
+  rbEachOpen,       /* xOpen */
+  rbEachClose,      /* xClose */
+  rbEachFilter,     /* xFilter */
+  rbEachNext,       /* xNext */
+  rbEachEof,        /* xEof */
+  rbEachColumn,     /* xColumn */
+  rbEachRowid,      /* xRowid */
+  0,                /* xUpdate */
+  0, 0, 0, 0,       /* xBegin..xRollback */
+  0,                /* xFindMethod */
+  0,                /* xRename */
+  0, 0, 0,          /* xSavepoint..xShadowName */
+};
+
+#endif /* SQLITE_OMIT_VIRTUALTABLE */
+
+/* ── rb64_each(bitmap BLOB) ──────────────────────────────────────────────────
+**
+** Table-valued function returning one row per integer in a roaring64 bitmap.
+** Mirrors rb_each but operates on 64-bit bitmaps using roaring64_iterator_t
+** (heap-allocated) and a uint64_t staging buffer.
+**
+** Usage:  SELECT value FROM rb64_each(bitmap_blob)
+*/
+
+#ifndef SQLITE_OMIT_VIRTUALTABLE
+
+#define RB64_EACH_CHUNK (4u * 1024u)
+
+typedef struct Rb64EachVtab   Rb64EachVtab;
+typedef struct Rb64EachCursor Rb64EachCursor;
+
+struct Rb64EachVtab {
+  sqlite3_vtab base;
+};
+
+struct Rb64EachCursor {
+  sqlite3_vtab_cursor  base;
+  roaring64_iterator_t *it;
+  roaring64_bitmap_t   *bm;
+  uint64_t             *buf;
+  uint32_t              cap;
+  uint64_t              nBuf;
+  uint64_t              iBuf;
+};
+
+static int rb64EachConnect(
+  sqlite3 *db,
+  void *pUnused,
+  int argcUnused, const char *const *argvUnused,
+  sqlite3_vtab **ppVtab,
+  char **pzErrUnused
+){
+  int rc;
+  Rb64EachVtab *pNew;
+  (void)pUnused; (void)argcUnused; (void)argvUnused; (void)pzErrUnused;
+  rc = sqlite3_declare_vtab(db, "CREATE TABLE x(value INTEGER, bitmap BLOB HIDDEN)");
+  if( rc==SQLITE_OK ){
+    pNew = sqlite3_malloc(sizeof(*pNew));
+    if( !pNew ) return SQLITE_NOMEM;
+    memset(pNew, 0, sizeof(*pNew));
+    sqlite3_vtab_config(db, SQLITE_VTAB_INNOCUOUS);
+    *ppVtab = &pNew->base;
+  }
+  return rc;
+}
+
+static int rb64EachDisconnect(sqlite3_vtab *pVtab){
+  sqlite3_free(pVtab);
+  return SQLITE_OK;
+}
+
+static int rb64EachOpen(sqlite3_vtab *pUnused, sqlite3_vtab_cursor **ppCursor){
+  Rb64EachCursor *pCur;
+  (void)pUnused;
+  pCur = sqlite3_malloc(sizeof(*pCur));
+  if( !pCur ) return SQLITE_NOMEM;
+  memset(pCur, 0, sizeof(*pCur));
+  *ppCursor = &pCur->base;
+  return SQLITE_OK;
+}
+
+static int rb64EachClose(sqlite3_vtab_cursor *cur){
+  Rb64EachCursor *pCur = (Rb64EachCursor *)cur;
+  if( pCur->it  ) roaring64_iterator_free(pCur->it);
+  if( pCur->bm  ) roaring64_bitmap_free(pCur->bm);
+  if( pCur->buf ) sqlite3_free(pCur->buf);
+  sqlite3_free(pCur);
+  return SQLITE_OK;
+}
+
+static int rb64EachBestIndex(sqlite3_vtab *pUnused, sqlite3_index_info *pIdx){
+  int i;
+  (void)pUnused;
+  for( i=0; i<pIdx->nConstraint; i++ ){
+    if( pIdx->aConstraint[i].iColumn != 1 ) continue;
+    if( pIdx->aConstraint[i].op != SQLITE_INDEX_CONSTRAINT_EQ ) continue;
+    if( !pIdx->aConstraint[i].usable ) continue;
+    pIdx->aConstraintUsage[i].argvIndex = 1;
+    pIdx->aConstraintUsage[i].omit      = 1;
+    pIdx->idxNum        = 1;
+    pIdx->estimatedRows = 1000;
+    pIdx->estimatedCost = 1.0;
+    return SQLITE_OK;
+  }
+  pIdx->estimatedRows = 0;
+  pIdx->estimatedCost = 1.0;
+  return SQLITE_OK;
+}
+
+static int rb64EachFilter(
+  sqlite3_vtab_cursor *cur,
+  int idxNum, const char *idxStr,
+  int argc, sqlite3_value **argv
+){
+  Rb64EachCursor *pCur = (Rb64EachCursor *)cur;
+  uint64_t card;
+  (void)idxNum; (void)idxStr;
+  if( pCur->it  ){ roaring64_iterator_free(pCur->it); pCur->it  = NULL; }
+  if( pCur->bm  ){ roaring64_bitmap_free(pCur->bm);   pCur->bm  = NULL; }
+  if( pCur->buf ){ sqlite3_free(pCur->buf);            pCur->buf = NULL; }
+  pCur->nBuf = pCur->iBuf = pCur->cap = 0;
+
+  if( argc<1 || sqlite3_value_type(argv[0])==SQLITE_NULL ) return SQLITE_OK;
+
+  pCur->bm = roaring64_bitmap_portable_deserialize_safe(
+      sqlite3_value_blob(argv[0]),
+      (size_t)sqlite3_value_bytes(argv[0]));
+  if( !pCur->bm ){
+    pCur->base.pVtab->zErrMsg = sqlite3_mprintf("rb64_each: invalid bitmap");
+    return SQLITE_ERROR;
+  }
+
+  card = roaring64_bitmap_get_cardinality(pCur->bm);
+  if( card==0 ) return SQLITE_OK;
+
+  pCur->cap = (uint32_t)(card < RB64_EACH_CHUNK ? (uint32_t)card : RB64_EACH_CHUNK);
+  pCur->buf = (uint64_t *)sqlite3_malloc64(pCur->cap * sizeof(uint64_t));
+  if( !pCur->buf ){ roaring64_bitmap_free(pCur->bm); pCur->bm=NULL; return SQLITE_NOMEM; }
+
+  pCur->it = roaring64_iterator_create(pCur->bm);
+  if( !pCur->it ){ sqlite3_free(pCur->buf); pCur->buf=NULL; roaring64_bitmap_free(pCur->bm); pCur->bm=NULL; return SQLITE_NOMEM; }
+  pCur->nBuf = roaring64_iterator_read(pCur->it, pCur->buf, pCur->cap);
+  return SQLITE_OK;
+}
+
+static int rb64EachNext(sqlite3_vtab_cursor *cur){
+  Rb64EachCursor *pCur = (Rb64EachCursor *)cur;
+  if( ++pCur->iBuf >= pCur->nBuf ){
+    pCur->nBuf = roaring64_iterator_read(pCur->it, pCur->buf, pCur->cap);
+    pCur->iBuf = 0;
+  }
+  return SQLITE_OK;
+}
+
+static int rb64EachEof(sqlite3_vtab_cursor *cur){
+  return ((Rb64EachCursor *)cur)->nBuf == 0;
+}
+
+static int rb64EachColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int col){
+  Rb64EachCursor *pCur = (Rb64EachCursor *)cur;
+  if( col==0 ) sqlite3_result_int64(ctx, (sqlite3_int64)pCur->buf[pCur->iBuf]);
+  return SQLITE_OK;
+}
+
+static int rb64EachRowid(sqlite3_vtab_cursor *cur, sqlite_int64 *pRowid){
+  Rb64EachCursor *pCur = (Rb64EachCursor *)cur;
+  *pRowid = (sqlite_int64)pCur->buf[pCur->iBuf];
+  return SQLITE_OK;
+}
+
+static sqlite3_module rb64EachModule = {
+  0,                  /* iVersion */
+  rb64EachConnect,    /* xCreate (== xConnect → eponymous) */
+  rb64EachConnect,    /* xConnect */
+  rb64EachBestIndex,  /* xBestIndex */
+  rb64EachDisconnect, /* xDisconnect */
+  rb64EachDisconnect, /* xDestroy */
+  rb64EachOpen,       /* xOpen */
+  rb64EachClose,      /* xClose */
+  rb64EachFilter,     /* xFilter */
+  rb64EachNext,       /* xNext */
+  rb64EachEof,        /* xEof */
+  rb64EachColumn,     /* xColumn */
+  rb64EachRowid,      /* xRowid */
+  0,                  /* xUpdate */
+  0, 0, 0, 0,         /* xBegin..xRollback */
+  0,                  /* xFindMethod */
+  0,                  /* xRename */
+  0, 0, 0,            /* xSavepoint..xShadowName */
+};
+
+#endif /* SQLITE_OMIT_VIRTUALTABLE */
+
 int sqlite3_roaring_init(
-  sqlite3 *db, 
-  char **pzErrMsg, 
+  sqlite3 *db,
+  char **pzErrMsg,
   const sqlite3_api_routines *pApi
 ){
   int rc = SQLITE_OK;
@@ -1284,9 +1639,13 @@ int sqlite3_roaring_init(
   rc = sqlite3_create_function(db, "rb64_group_and", 1, flags, 0, 0, roaring64AndAllStep, roaring64AndAllFinal);
   rc = sqlite3_create_function(db, "rb64_group_or", 1, flags, 0, 0, roaring64OrAllStep, roaring64OrAllFinal);
 
-  // carray based SQL functions (for conversion to a virtual table) 
+  // carray based SQL functions (for conversion to a virtual table)
   rc = sqlite3_create_function(db, "rb_array", 1, flags, 0, roaringArrayFunc, 0, 0);
   // 64 bit version
   rc = sqlite3_create_function(db, "rb64_array", 1, flags, 0, roaring64ArrayFunc, 0, 0);
+#ifndef SQLITE_OMIT_VIRTUALTABLE
+  rc = sqlite3_create_module(db, "rb_each", &rbEachModule, 0);
+  rc = sqlite3_create_module(db, "rb64_each", &rb64EachModule, 0);
+#endif
   return rc;
 }

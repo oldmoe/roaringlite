@@ -4,7 +4,12 @@ require 'extralite'
 DB = Extralite::Database.new(":memory:")
 #DB.enable_load_extension(true)
 DB.load_extension("../dist/libroaring.so")
-DB.load_extension("../dist/carray.so")
+CARRAY_AVAILABLE = begin
+  DB.load_extension("../dist/carray.so")
+  true
+rescue
+  false
+end
 DB.execute("CREATE TABLE bitmaps(id INTEGER PRIMARY KEY, bitmap BLOB)")
 
 class TestRoaringBitmap < Minitest::Test
@@ -179,11 +184,13 @@ class TestRoaringBitmap < Minitest::Test
   end
 
   def test_rb_array
+    skip "carray not available" unless CARRAY_AVAILABLE
     result = DB.query_single_splat("SELECT sum(value) FROM carray(rb_array(rb_create(1, 10, 100, 1000)), 4)")
     assert_equal 1111, result
   end
 
   def test_rb64_array
+    skip "carray not available" unless CARRAY_AVAILABLE
     result = DB.query_single_splat("SELECT sum(value) FROM carray(rb64_array(rb64_create(1, 10, 100, 1000)), 4, 'int64')")
     assert_equal 1111, result
   end
@@ -230,6 +237,82 @@ class TestRoaringBitmap < Minitest::Test
     DB.execute("INSERT INTO bitmaps(bitmap) VALUES (rb64_create(1,2,3,4)), (rb64_create(4)), (rb64_create(4,7))")
     result = DB.query_single_splat("SELECT rb64_count(rb64_group_or(bitmap)) AS length FROM bitmaps")
     DB.execute("DELETE FROM bitmaps")
+    assert_equal 5, result
+  end
+
+  def test_rb_each_count
+    result = DB.query_single_splat("SELECT count(*) FROM rb_each(rb_create(1,2,3,7))")
+    assert_equal 4, result
+  end
+
+  def test_rb_each_sum
+    result = DB.query_single_splat("SELECT sum(value) FROM rb_each(rb_create(1,10,100))")
+    assert_equal 111, result
+  end
+
+  def test_rb_each_min
+    assert_equal 1, DB.query_single_splat("SELECT min(value) FROM rb_each(rb_create(5,3,9,1))")
+  end
+
+  def test_rb_each_max
+    assert_equal 9, DB.query_single_splat("SELECT max(value) FROM rb_each(rb_create(5,3,9,1))")
+  end
+
+  def test_rb_each_empty
+    result = DB.query_single_splat("SELECT count(*) FROM rb_each(rb_create())")
+    assert_equal 0, result
+  end
+
+  def test_rb_each_null
+    result = DB.query_single_splat("SELECT count(*) FROM rb_each(NULL)")
+    assert_equal 0, result
+  end
+
+  def test_rb_each_roundtrip
+    result = DB.query_single_splat("SELECT rb_count(rb_group_create(value)) FROM rb_each(rb_create(4,3,2,1,5))")
+    assert_equal 5, result
+  end
+
+  def test_rb64_each_count
+    result = DB.query_single_splat("SELECT count(*) FROM rb64_each(rb64_create(1,2,3,7))")
+    assert_equal 4, result
+  end
+
+  def test_rb64_each_sum
+    result = DB.query_single_splat("SELECT sum(value) FROM rb64_each(rb64_create(1,10,100))")
+    assert_equal 111, result
+  end
+
+  def test_rb64_each_min
+    assert_equal 1, DB.query_single_splat("SELECT min(value) FROM rb64_each(rb64_create(5,3,9,1))")
+  end
+
+  def test_rb64_each_max
+    assert_equal 9, DB.query_single_splat("SELECT max(value) FROM rb64_each(rb64_create(5,3,9,1))")
+  end
+
+  def test_rb64_each_empty
+    result = DB.query_single_splat("SELECT count(*) FROM rb64_each(rb64_create())")
+    assert_equal 0, result
+  end
+
+  def test_rb64_each_null
+    result = DB.query_single_splat("SELECT count(*) FROM rb64_each(NULL)")
+    assert_equal 0, result
+  end
+
+  def test_rb64_each_large_values
+    result = DB.query_single_splat("SELECT count(*) FROM rb64_each(rb64_create(9000000000,9000000001,9000000002))")
+    assert_equal 3, result
+  end
+
+  def test_rb64_each_large_sum
+    result = DB.query_single_splat("SELECT sum(value) FROM rb64_each(rb64_create(9000000000,9000000001,9000000002))")
+    assert_equal 27000000003, result
+  end
+
+  def test_rb64_each_roundtrip
+    result = DB.query_single_splat("SELECT rb64_count(rb64_group_create(value)) FROM rb64_each(rb64_create(4,3,2,1,5))")
     assert_equal 5, result
   end
 
