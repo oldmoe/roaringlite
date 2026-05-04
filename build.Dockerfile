@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim AS builder
+FROM debian:bookworm-slim AS base
 
 ARG ZIG_VERSION=0.11.0
 ARG SQLITE_VERSION=3530000
@@ -21,15 +21,13 @@ RUN curl -fsSL "https://www.sqlite.org/${SQLITE_YEAR}/sqlite-amalgamation-${SQLI
   && mv sqlite-amalgamation-${SQLITE_VERSION} sqlite \
   && rm sqlite.zip
 
-# Build CRoaring amalgamation from the submodule
 COPY CRoaring /build/CRoaring
 RUN mkdir -p /build/roaringlite/src \
   && cd /build/CRoaring && ./amalgamation.sh /build/roaringlite/src
 
-# Copy roaringlite source alongside the freshly built amalgamation
 COPY src/libsqlite3roaring.c /build/roaringlite/src/libsqlite3roaring.c
 
-WORKDIR /build/sqlite
+RUN mkdir -p /out/lib
 
 ENV CFLAGS="-O3 \
     -DSQLITE_ENABLE_FTS5 \
@@ -45,45 +43,53 @@ ENV CFLAGS="-O3 \
     -DSQLITE_MAX_MMAP_SIZE=2147483648 \
     -fPIC"
 
-RUN mkdir -p /out/lib
 
+FROM base AS build-macos-x86_64
 RUN zig cc -target x86_64-macos $CFLAGS -shared -fvisibility=hidden \
-    sqlite3.c -o /out/lib/libsqlite3-x86_64.dylib
+      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-x86_64.dylib \
+ && zig cc -target x86_64-macos -O3 -shared -fPIC -fvisibility=hidden \
+      -I /build/sqlite -I /build/roaringlite/src \
+      /build/roaringlite/src/libsqlite3roaring.c \
+      -o /out/lib/roaringlite-x86_64.dylib
 
+FROM base AS build-macos-aarch64
 RUN zig cc -target aarch64-macos $CFLAGS -shared -fvisibility=hidden \
-    sqlite3.c -o /out/lib/libsqlite3-aarch64.dylib
+      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-aarch64.dylib \
+ && zig cc -target aarch64-macos -O3 -shared -fPIC -fvisibility=hidden \
+      -I /build/sqlite -I /build/roaringlite/src \
+      /build/roaringlite/src/libsqlite3roaring.c \
+      -o /out/lib/roaringlite-aarch64.dylib
 
-RUN zig cc -target aarch64-linux $CFLAGS -shared -fvisibility=hidden \
-    sqlite3.c -o /out/lib/libsqlite3-aarch64.so
-
+FROM base AS build-linux-x86_64
 RUN zig cc -target x86_64-linux $CFLAGS -shared -fvisibility=hidden \
-    sqlite3.c -o /out/lib/libsqlite3-x86_64.so
+      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-x86_64.so \
+ && zig cc -target x86_64-linux -O3 -shared -fPIC -fvisibility=hidden \
+      -I /build/sqlite -I /build/roaringlite/src \
+      /build/roaringlite/src/libsqlite3roaring.c \
+      -o /out/lib/roaringlite-x86_64.so
 
-WORKDIR /build/roaringlite/src
+FROM base AS build-linux-aarch64
+RUN zig cc -target aarch64-linux $CFLAGS -shared -fvisibility=hidden \
+      /build/sqlite/sqlite3.c -o /out/lib/libsqlite3-aarch64.so \
+ && zig cc -target aarch64-linux -O3 -shared -fPIC -fvisibility=hidden \
+      -I /build/sqlite -I /build/roaringlite/src \
+      /build/roaringlite/src/libsqlite3roaring.c \
+      -o /out/lib/roaringlite-aarch64.so
 
-RUN zig cc -target x86_64-macos -O3 -shared -fPIC -fvisibility=hidden \
-    -I /build/sqlite \
-    -I /build/roaringlite/src \
-    libsqlite3roaring.c \
-    -o /out/lib/roaringlite-x86_64.dylib
+FROM base AS build-windows-x86_64
+RUN zig cc -target x86_64-windows -O3 -shared -fvisibility=hidden \
+      -I /build/sqlite -I /build/roaringlite/src \
+      /build/roaringlite/src/libsqlite3roaring.c \
+      -o /out/lib/roaringlite-x86_64.dll
 
-RUN zig cc -target aarch64-macos -O3 -shared -fPIC -fvisibility=hidden \
-    -I /build/sqlite \
-    -I /build/roaringlite/src \
-    libsqlite3roaring.c \
-    -o /out/lib/roaringlite-aarch64.dylib
 
-RUN zig cc -target aarch64-linux -O3 -shared -fPIC -fvisibility=hidden \
-    -I /build/sqlite \
-    -I /build/roaringlite/src \
-    libsqlite3roaring.c \
-    -o /out/lib/roaringlite-aarch64.so
+FROM scratch AS collect
+COPY --from=build-macos-x86_64   /out/lib/ /out/lib/
+COPY --from=build-macos-aarch64  /out/lib/ /out/lib/
+COPY --from=build-linux-x86_64   /out/lib/ /out/lib/
+COPY --from=build-linux-aarch64  /out/lib/ /out/lib/
+COPY --from=build-windows-x86_64 /out/lib/ /out/lib/
 
-RUN zig cc -target x86_64-linux -O3 -shared -fPIC -fvisibility=hidden \
-    -I /build/sqlite \
-    -I /build/roaringlite/src \
-    libsqlite3roaring.c \
-    -o /out/lib/roaringlite-x86_64.so
 
 FROM debian:bookworm-slim AS test
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -91,9 +97,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/* \
   && gem install minitest extralite --no-document
 
-# Build a native libroaring.so against the system sqlite3 headers
-COPY --from=builder /build/roaringlite/src/ /build/src/
-COPY --from=builder /build/sqlite/sqlite3.h /build/sqlite/sqlite3ext.h /build/sqlite/
+COPY --from=base /build/roaringlite/src/ /build/src/
+COPY --from=base /build/sqlite/sqlite3.h /build/sqlite/sqlite3ext.h /build/sqlite/
 RUN mkdir -p /dist \
   && cc -shared -fPIC -O2 \
        -I /build/sqlite \
@@ -101,8 +106,7 @@ RUN mkdir -p /dist \
        /build/src/libsqlite3roaring.c \
        -o /dist/libroaring.so
 
-# Copy all built artifacts so export can reference this stage
-COPY --from=builder /out/lib/ /out/lib/
+COPY --from=collect /out/lib/ /out/lib/
 
 COPY test/ /test/
 WORKDIR /test
